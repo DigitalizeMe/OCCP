@@ -71,6 +71,7 @@
     occp:endsCycle rdf:type owl:ObjectProperty ;
                 rdfs:subPropertyOf <http://www.w3.org/2006/time#hasEnd> ;
                 rdfs:domain <http://www.w3.org/2006/time#Instant> ;
+                rdfs:range occp:Cycle ;
                 rdfs:comment "The object property \"endsCycle\" is used to mark instants that end an ongoing cycle within a phase."@en ;
                 rdfs:label "ends cycle"@en .
 
