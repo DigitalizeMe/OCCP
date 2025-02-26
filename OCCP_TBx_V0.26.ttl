@@ -18,10 +18,10 @@
 
     ###  http://www.semanticweb.org/albrechtvaatz/ontologies/2022/9/cMod_V0.1#after
     occp:after rdf:type owl:ObjectProperty ;
-            rdfs:subPropertyOf time:after ;
-            rdf:type owl:TransitiveProperty ;
-            rdfs:comment "A transitive variant of time:after, ensuring that if A occurs after B and B occurs after C, then A also occurs after C."@en ;
-            rdfs:label "after (transitive)"@en .
+                rdfs:subPropertyOf time:after ;
+                rdf:type owl:TransitiveProperty ;
+                rdfs:comment "A transitive variant of time:after, ensuring that if A occurs after B and B occurs after C, then A also occurs after C."@en ;
+                rdfs:label "after (transitive)"@en .
 
 
     ###  http://www.semanticweb.org/albrechtvaatz/ontologies/2022/9/cMod_V0.1#before
@@ -63,13 +63,13 @@
 
     ###  http://www.semanticweb.org/albrechtvaatz/ontologies/2022/9/cMod_V0.1#endsAfter
     occp:endsAfter rdf:type owl:ObjectProperty ;
-                rdfs:subPropertyOf <http://www.w3.org/2006/time#hasEnd> ;
-                rdfs:domain <http://www.w3.org/2006/time#TemporalEntity> ;
-                rdfs:range <http://www.w3.org/2006/time#TemporalEntity> ;
-                owl:inverseOf occp:endsBefore ;
-                rdf:type owl:TransitiveProperty ;
-                rdfs:comment "The object property \"endsAfter\" is used with time:interval or time:instant to describe the chronological order of the endings of T1 and T2. If a time:interval T1 \"endsAfter\" T2, it only describes, that the ends of T1 happens after the end of T2 without defining the order of the beginnings of T1 and T2, so the beginnings of T1 and T2 can happen in any order or simulaneously."@en ;
-                rdfs:label "ends after"@en .
+                   rdfs:subPropertyOf <http://www.w3.org/2006/time#hasEnd> ;
+                   rdfs:domain <http://www.w3.org/2006/time#TemporalEntity> ;
+                   rdfs:range <http://www.w3.org/2006/time#TemporalEntity> ;
+                   owl:inverseOf occp:endsBefore ;
+                   rdf:type owl:TransitiveProperty ;
+                   rdfs:comment "The object property \"endsAfter\" is used with time:interval or time:instant to describe the chronological order of the endings of T1 and T2. If a time:interval T1 \"endsAfter\" T2, it only describes, that the ends of T1 happens after the end of T2 without defining the order of the beginnings of T1 and T2, so the beginnings of T1 and T2 can happen in any order or simulaneously."@en ;
+                   rdfs:label "ends after"@en .
 
 
     ###  http://www.semanticweb.org/albrechtvaatz/ontologies/2022/9/cMod_V0.1#endsBefore
@@ -81,6 +81,7 @@
                     rdf:type owl:TransitiveProperty ;
                     rdfs:comment "The object property \"endsBefore\" is used with time:interval or time:instant to describe the chronological order of the endings of T1 and T2. If a time:interval T1 \"endsBefore\" T2, it only describes, that the end of T1 happens before the end of T2 without defining the order of the beginnings of T1 and T2, so the beginnings of T1 and T2 can happen in any order or simulaneously."@en ;
                     rdfs:label "ends before"@en .
+
 
     ###  http://www.semanticweb.org/albrechtvaatz/ontologies/2022/9/cMod_V0.1#endsCycle
     occp:endsCycle rdf:type owl:ObjectProperty ;
