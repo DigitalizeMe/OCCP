@@ -34,16 +34,22 @@
 
     ###  http://www.semanticweb.org/albrechtvaatz/ontologies/2022/9/cMod_V0.1#beginsAfter
     occp:beginsAfter rdf:type owl:ObjectProperty ;
-                    rdfs:subPropertyOf <http://www.w3.org/2006/time#hasBeginning> ;
-                    rdfs:comment "The object property \"beginsAfter\" is used with time:interval or time:instant to describe the chronological order of the beginnings of T1 and T2. If a time:interval T1 \"beginsAfter\" T2, it only describes, that the beginning of T1 happens after the beginning of T2 without defining the order of the ends of T1 and T2, so the ends of T1 and T2 can happen in any order or simulaneously."@en ;
-                    rdfs:label "begins after"@en .
+                     rdfs:subPropertyOf <http://www.w3.org/2006/time#hasBeginning> ;
+                     rdfs:domain <http://www.w3.org/2006/time#TemporalEntity> ;
+                     rdfs:range <http://www.w3.org/2006/time#TemporalEntity> ;
+                     owl:inverseOf occp:beginsBefore ;
+                     rdfs:comment "The object property \"beginsAfter\" is used with time:interval or time:instant to describe the chronological order of the beginnings of T1 and T2. If a time:interval T1 \"beginsAfter\" T2, it only describes, that the beginning of T1 happens after the beginning of T2 without defining the order of the ends of T1 and T2, so the ends of T1 and T2 can happen in any order or simulaneously."@en ;
+                     rdfs:label "begins after"@en .
 
 
     ###  http://www.semanticweb.org/albrechtvaatz/ontologies/2022/9/cMod_V0.1#beginsBefore
     occp:beginsBefore rdf:type owl:ObjectProperty ;
-                    rdfs:subPropertyOf <http://www.w3.org/2006/time#hasBeginning> ;
-                    rdfs:comment "The object property \"beginsBefore\" is used with time:interval or time:instant to describe the chronological order of the beginnings of T1 and T2. If a time:interval T1 \"beginsBefore\" T2, it only describes, that the beginning of T1 happens before the beginning of T2 without defining the order of the ends of T1 and T2, so the ends of T1 and T2 can happen in any order or simulaneously."@en ;
-                    rdfs:label "begins before"@en .
+                      rdfs:subPropertyOf <http://www.w3.org/2006/time#hasBeginning> ;
+                      rdfs:domain <http://www.w3.org/2006/time#TemporalEntity> ;
+                      rdfs:range <http://www.w3.org/2006/time#TemporalEntity> ;
+                      owl:inverseOf occp:beginsAfter ;
+                      rdfs:comment "The object property \"beginsBefore\" is used with time:interval or time:instant to describe the chronological order of the beginnings of T1 and T2. If a time:interval T1 \"beginsBefore\" T2, it only describes, that the beginning of T1 happens before the beginning of T2 without defining the order of the ends of T1 and T2, so the ends of T1 and T2 can happen in any order or simulaneously."@en ;
+                      rdfs:label "begins before"@en .
 
 
     ###  http://www.semanticweb.org/albrechtvaatz/ontologies/2022/9/cMod_V0.1#beginsWith
@@ -56,6 +62,9 @@
     ###  http://www.semanticweb.org/albrechtvaatz/ontologies/2022/9/cMod_V0.1#endsAfter
     occp:endsAfter rdf:type owl:ObjectProperty ;
                 rdfs:subPropertyOf <http://www.w3.org/2006/time#hasEnd> ;
+                rdfs:domain <http://www.w3.org/2006/time#TemporalEntity> ;
+                rdfs:range <http://www.w3.org/2006/time#TemporalEntity> ;
+                owl:inverseOf occp:endsBefore ;
                 rdfs:comment "The object property \"endsAfter\" is used with time:interval or time:instant to describe the chronological order of the endings of T1 and T2. If a time:interval T1 \"endsAfter\" T2, it only describes, that the ends of T1 happens after the end of T2 without defining the order of the beginnings of T1 and T2, so the beginnings of T1 and T2 can happen in any order or simulaneously."@en ;
                 rdfs:label "ends after"@en .
 
@@ -63,9 +72,11 @@
     ###  http://www.semanticweb.org/albrechtvaatz/ontologies/2022/9/cMod_V0.1#endsBefore
     occp:endsBefore rdf:type owl:ObjectProperty ;
                     rdfs:subPropertyOf <http://www.w3.org/2006/time#hasEnd> ;
+                    rdfs:domain <http://www.w3.org/2006/time#TemporalEntity> ;
+                    rdfs:range <http://www.w3.org/2006/time#TemporalEntity> ;
+                    owl:inverseOf occp:endsAfter ;
                     rdfs:comment "The object property \"endsBefore\" is used with time:interval or time:instant to describe the chronological order of the endings of T1 and T2. If a time:interval T1 \"endsBefore\" T2, it only describes, that the end of T1 happens before the end of T2 without defining the order of the beginnings of T1 and T2, so the beginnings of T1 and T2 can happen in any order or simulaneously."@en ;
                     rdfs:label "ends before"@en .
-
 
     ###  http://www.semanticweb.org/albrechtvaatz/ontologies/2022/9/cMod_V0.1#endsCycle
     occp:endsCycle rdf:type owl:ObjectProperty ;
