@@ -677,6 +677,58 @@
     sh:message "The date must be in the format YYYY-MM-DD." ;
     sh:severity sh:Violation .
 
+    # Shape for occp:beginsAfter
+    osh:BeginsAfterShape
+        a sh:NodeShape ;
+        sh:targetSubjectsOf occp:beginsAfter ;
+        sh:property [
+            sh:path occp:beginsAfter ;
+            sh:class time:TemporalEntity ; 
+        ] ;
+        sh:inverseProperty [
+            sh:path occp:beginsBefore ;
+            sh:description "If Temporal Entity A starts after (occp:beginsAfter) Entity B, Entity B must start before (occp:beginsBefore) Entity A." ;
+        ] .
+
+    # Shape for occp:beginsBefore
+    osh:BeginsBeforeShape
+        a sh:NodeShape ;
+        sh:targetSubjectsOf occp:beginsBefore ;
+        sh:property [
+            sh:path occp:beginsBefore ;
+            sh:class time:TemporalEntity ; 
+        ] ;
+        sh:inverseProperty [
+            sh:path occp:beginsAfter ;
+            sh:description "If Temporal Entity A starts before (occp:beginsBefore) Entity B, Entity B must start after (occp:beginsAfter) Entity A." ;
+        ] .
+
+    # Shape for occp:endsAfter
+    osh:EndsAfterShape
+        a sh:NodeShape ;
+        sh:targetSubjectsOf occp:endsAfter ;
+        sh:property [
+            sh:path occp:endsAfter ;
+            sh:class time:TemporalEntity ; 
+        ] ;
+        sh:inverseProperty [
+            sh:path occp:endsBefore ;
+            sh:description "If Temporal Entity A ends after (occp:endsAfter) Entity B, Entity B must end before (occp:endsBefore) Entity A." ;
+        ] .
+
+    # Shape for occp:endsBefore
+    osh:endsBeforeShape
+        a sh:NodeShape ;
+        sh:targetSubjectsOf occp:endsBefore ;
+        sh:property [
+            sh:path occp:endsBefore ;
+            sh:class time:TemporalEntity ; 
+        ] ;
+        sh:inverseProperty [
+            sh:path occp:endsAfter ;
+            sh:description "If Temporal Entity A ends before (occp:endsBefore) Entity B, Entity B must end after (occp:endsAfter) Entity A." ;
+        ] .
+
 ### ORDER OF PHASES AND TRANSITIONS
 
   osh:ShapeOfPhaseA a sh:NodeShape ;              # Phase A (Planning)
