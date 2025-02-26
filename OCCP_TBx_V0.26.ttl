@@ -38,6 +38,7 @@
                      rdfs:domain <http://www.w3.org/2006/time#TemporalEntity> ;
                      rdfs:range <http://www.w3.org/2006/time#TemporalEntity> ;
                      owl:inverseOf occp:beginsBefore ;
+                     rdf:type owl:TransitiveProperty ;
                      rdfs:comment "The object property \"beginsAfter\" is used with time:interval or time:instant to describe the chronological order of the beginnings of T1 and T2. If a time:interval T1 \"beginsAfter\" T2, it only describes, that the beginning of T1 happens after the beginning of T2 without defining the order of the ends of T1 and T2, so the ends of T1 and T2 can happen in any order or simulaneously."@en ;
                      rdfs:label "begins after"@en .
 
@@ -48,6 +49,7 @@
                       rdfs:domain <http://www.w3.org/2006/time#TemporalEntity> ;
                       rdfs:range <http://www.w3.org/2006/time#TemporalEntity> ;
                       owl:inverseOf occp:beginsAfter ;
+                      rdf:type owl:TransitiveProperty ;
                       rdfs:comment "The object property \"beginsBefore\" is used with time:interval or time:instant to describe the chronological order of the beginnings of T1 and T2. If a time:interval T1 \"beginsBefore\" T2, it only describes, that the beginning of T1 happens before the beginning of T2 without defining the order of the ends of T1 and T2, so the ends of T1 and T2 can happen in any order or simulaneously."@en ;
                       rdfs:label "begins before"@en .
 
@@ -65,6 +67,7 @@
                 rdfs:domain <http://www.w3.org/2006/time#TemporalEntity> ;
                 rdfs:range <http://www.w3.org/2006/time#TemporalEntity> ;
                 owl:inverseOf occp:endsBefore ;
+                rdf:type owl:TransitiveProperty ;
                 rdfs:comment "The object property \"endsAfter\" is used with time:interval or time:instant to describe the chronological order of the endings of T1 and T2. If a time:interval T1 \"endsAfter\" T2, it only describes, that the ends of T1 happens after the end of T2 without defining the order of the beginnings of T1 and T2, so the beginnings of T1 and T2 can happen in any order or simulaneously."@en ;
                 rdfs:label "ends after"@en .
 
@@ -75,6 +78,7 @@
                     rdfs:domain <http://www.w3.org/2006/time#TemporalEntity> ;
                     rdfs:range <http://www.w3.org/2006/time#TemporalEntity> ;
                     owl:inverseOf occp:endsAfter ;
+                    rdf:type owl:TransitiveProperty ;
                     rdfs:comment "The object property \"endsBefore\" is used with time:interval or time:instant to describe the chronological order of the endings of T1 and T2. If a time:interval T1 \"endsBefore\" T2, it only describes, that the end of T1 happens before the end of T2 without defining the order of the beginnings of T1 and T2, so the beginnings of T1 and T2 can happen in any order or simulaneously."@en ;
                     rdfs:label "ends before"@en .
 
