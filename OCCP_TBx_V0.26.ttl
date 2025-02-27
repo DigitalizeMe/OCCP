@@ -19,6 +19,7 @@
     ###  http://www.semanticweb.org/albrechtvaatz/ontologies/2022/9/cMod_V0.1#after
     occp:after rdf:type owl:ObjectProperty ;
                 rdfs:subPropertyOf time:after ;
+                owl:inverseOf occp:before ;
                 rdf:type owl:TransitiveProperty ;
                 rdfs:comment "A transitive variant of time:after, ensuring that if A occurs after B and B occurs after C, then A also occurs after C."@en ;
                 rdfs:label "after (transitive)"@en .
@@ -27,10 +28,10 @@
     ###  http://www.semanticweb.org/albrechtvaatz/ontologies/2022/9/cMod_V0.1#before
     occp:before rdf:type owl:ObjectProperty ;
                 rdfs:subPropertyOf time:before ;
+                owl:inverseOf occp:after ;
                 rdf:type owl:TransitiveProperty ;
                 rdfs:comment "A transitive variant of time:before, ensuring that if A occurs before B and B occurs before C, then A also occurs before C."@en ;
                 rdfs:label "before (transitive)"@en .
-
 
     ###  http://www.semanticweb.org/albrechtvaatz/ontologies/2022/9/cMod_V0.1#beginsAfter
     occp:beginsAfter rdf:type owl:ObjectProperty ;
