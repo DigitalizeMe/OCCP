@@ -90,13 +90,6 @@
                     ]
                 ) ;
                 sh:property [
-                    sh:path occp:startsPhase ;
-                    sh:class occp:PhaseB_Review ;
-                    sh:maxCount 1 ;
-                    sh:message "SubmissionToReview can start at most one Phase B (Review)."@en ;
-                    sh:severity sh:Violation ;
-                ] ;
-                sh:property [
                     sh:path occp:startsCycle ;
                     sh:class occp:CycleA_PlanningReview ;
                     sh:maxCount 1 ;
@@ -140,6 +133,9 @@
                 sh:property [
                     sh:path occp:startsPhase ;
                     sh:class occp:PhaseB_Review ;
+                    sh:maxCount 1 ;
+                    sh:message "Review Start can start at most one Phase B (Review)."@en ;
+                    sh:severity sh:Violation ;
                 ] ;
                 sh:or (                                     # Instant's chronological order within the Phase - 2 Options
                     [
@@ -154,35 +150,25 @@
                         sh:message "Wrong assignment (chronological order) of Review Start or Review Rejection."@en ;
                         sh:severity sh:Violation ;
                     ]
-                ) ;
-                sh:property [
-                    sh:path occp:after ;
-                    sh:class occp:SubmissionToReview ;
-                    sh:message "Wrong assignment (chronological order) of Review Start or Submission to Review."@en ;
-                    sh:severity sh:Violation ;
-                ] ;
-                sh:property [                               # Instant has a date as time stamp.
-                    sh:path time:hasTime ;                  # Time stamp has to be set 
-                    sh:qualifiedValueShape [                # The following object properties are valid options to set time stamp
-                        sh:path (
-                        occp:hasEstimatedTime
-                        occp:hasActualTime
-                        ) ;
-                        sh:minCount 1 ;
-                        ] ;
-                    sh:message "Missing time stamp (Estimated or Actual Time) for Review Start - min. count = 1."@en ;
-                    sh:severity sh:Violation ;
-                ] .
+                ) .
 
             osh:ReviewApprovalShape a sh:NodeShape ;        # Instant Review Approval (Phase B - Review)
                 sh:targetClass occp:ReviewApproval ;
                 sh:property [
                     sh:path occp:endsPhase ;
                     sh:class occp:PhaseA_Planning ;
+                    sh:minCount 1 ;
+                    sh:maxCount 1 ;
+                    sh:message "ReviewApproval must end exactly one Phase A (Planning)."@en ;
+                    sh:severity sh:Violation ;
                 ] ;
                 sh:property [
                     sh:path occp:endsPhase ;
                     sh:class occp:PhaseB_Review ;
+                    sh:minCount 1 ;
+                    sh:maxCount 1 ;
+                    sh:message "ReviewApproval must end exactly one Phase B (Review)."@en ;
+                    sh:severity sh:Violation ;
                 ] ;
                 sh:property [                               # Instant's chronological order within the Phase
                     sh:path occp:after ;
@@ -193,11 +179,9 @@
                 sh:property [                               # Instant (Review Approval) ends current Cycle A (Planning/Review).
                     sh:path occp:endsCycle ;              
                     sh:class occp:CycleA_PlanningReview ;
-                ] ;
-                sh:property [                                # Instant has a date as time stamp.
-                    sh:path time:hasTime ;
+                    sh:minCount 1 ;
                     sh:maxCount 1 ;
-                    sh:message "Too many dates for Review Approval - max. count = 1."@en ;
+                    sh:message "ReviewApproval must end exactly one Cycle A (Planning/Review)."@en ;
                     sh:severity sh:Violation ;
                 ] .
 
@@ -209,13 +193,23 @@
                     sh:message "Wrong assignment (chronological order) of Review Rejection or Review Start."@en ;
                     sh:severity sh:Violation ;
                 ] ;
-                sh:property [                                # Instant (Review Rejection) ends current Cycle A (Planning/Review).
-                    sh:path occp:endsCycle ;              
+                sh:property [
+                    sh:path occp:endsCycle ;
                     sh:class occp:CycleA_PlanningReview ;
+                    sh:minCount 1 ;
+                    sh:maxCount 1 ;
+                    sh:message "ReviewRejection must end exactly one Cycle A (Planning/Review)."@en ;
+                    sh:severity sh:Violation ;
                 ] ;
-                sh:property [                                # Instant has a date as time stamp.
-                    sh:path time:hasTime ;
+                sh:property [
+                    sh:path occp:startsCycle ;
+                    sh:class occp:CycleA_PlanningReview ;
+                    sh:minCount 1 ;
+                    sh:maxCount 1 ;
+                    sh:message "ReviewRejection must start exactly one new Cycle A (Planning/Review)."@en ;
+                    sh:severity sh:Violation ;
                 ] .
+
 
 
     ### PHASE C INSTANTS
