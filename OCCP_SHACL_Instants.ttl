@@ -14,9 +14,11 @@
                 sh:property [
                     sh:path occp:hasPhase ;
                     sh:class occp:PhaseA_Planning ;
-                    sh:message "Wrong Phase/Instant assignment - Instant should belong to Phase A (Planning)."@en ;
+                    sh:minCount 1 ;
+                    sh:maxCount 1 ;
+                    sh:message "Each Phase A Instant must belong to exactly one Phase A (Planning)."@en ;
                     sh:severity sh:Violation ;
-            ] .
+                ] .
 
         ### INSTANT SHAPES PHASE A - PLANNING
 
@@ -25,34 +27,22 @@
                 sh:property [                               # Instant (Beginning Of Planning) starts a new Phase A (Planning).
                     sh:path occp:startsPhase ;              
                     sh:class occp:PhaseA_Planning ;
-                ] ;
-                sh:property [                               # Instant (Beginning Of Planning) starts a new Cycle A (Planning/Review).
-                    sh:path occp:startsCycle ;              
-                    sh:class occp:CycleA_PlanningReview ;
+                    sh:maxCount 1 ;
+                    sh:minCount 1 ;
+                    sh:message "BeginningOfPlanning must start exactly one Phase A (Planning)."@en ;
+                    sh:severity sh:Violation ;
                 ] ;
                 sh:property [                               # Instant's chronological order within the Phase
                     sh:path occp:before ;                   
                     sh:class occp:DataProcurement ;
-                    sh:message "Wrong assignment (chronological order) of Beginning Of Planning or Data Procurement."@en ;
+                    sh:message "Wrong chronological order: BeginningOfPlanning must occur before DataProcurement."@en ;
                     sh:severity sh:Violation ;
                 ] ;
-                sh:property [                               # Instant has a date as time stamp.
-                    sh:path time:hasTime ;                  # Time stamp has to be set 
-                    sh:qualifiedValueShape [                # The following object properties are valid options to set time stamp
-                        sh:path (
-                        occp:hasEstimatedTime
-                        occp:hasActualTime
-                        ) ;
-                        sh:minCount 1 ;
-                        ] ;
-                    sh:message "Missing time stamp (Estimated or Actual Time) for Beginning of Planning - min. count = 1."@en ;
-                    sh:severity sh:Violation ;
-                ] ;
-                sh:property [                               # Actual Time stamp - limitation
-                    sh:path occp:hasActualTime ;
-                    sh:maxCount 1 ;
-                    sh:message "Too many dates for Actual Time stamp for Beginning of Planning - max. count = 1" ;
-                    sh:severity sh:Violation ;
+                sh:property [
+                    sh:path occp:before ;
+                    sh:class occp:SubmissionToReview ;
+                    sh:message "Wrong chronological order: BeginningOfPlanning should occur before SubmissionToReview."@en ;
+                    sh:severity sh:Warning ;
                 ] .
 
             osh:DataProcurementShape a sh:NodeShape ;       # Instant Data Procurement (Phase A - Planning)
@@ -60,20 +50,14 @@
                 sh:property [                               # Instant's chronological order within the Phase
                     sh:path occp:after ;                    
                     sh:class occp:BeginningOfPlanning ;
-                    sh:message "Wrong assignment (chronological order) of Data Procurement or Beginning Of Planning."@en ;
+                    sh:message "Wrong chronological order: DataProcurement must occur after BeginningOfPlanning."@en ;
                     sh:severity sh:Violation ;
                 ] ;
                 sh:property [                               # Instant's chronological order within the Phase
                     sh:path occp:before ;                   
                     sh:class occp:SubmissionToReview ;
-                    sh:message "Wrong assignment (chronological order) of Data Procurement or Submission To Review."@en ;
-                    sh:severity sh:Violation ;
-                ] ;
-                sh:property [                               # Instant has a date as time stamp.
-                    sh:path time:hasTime ;      
-                    sh:minCount 1 ;            
-                    sh:message "Missing date for Data Procurement - min. count = 1."@en ;
-                    sh:severity sh:Violation ;
+                    sh:message "Wrong chronological order: DataProcurement should occur before SubmissionToReview."@en ;
+                    sh:severity sh:Warning ;
                 ] .
 
             osh:Edit_BSTRShape a sh:NodeShape ;             # Instant Edit Before Submission To Review (Phase A - Planning)
@@ -81,19 +65,13 @@
                 sh:property [                               # Instant's chronological order within the Phase
                     sh:path occp:after ;                    
                     sh:class occp:BeginningOfPlanning ;
-                    sh:message "Wrong assignment (chronological order) of Edit Before Submission To Review or Beginning Of Planning."@en ;
+                    sh:message "Wrong chronological order: Edit Before Submission To Review must occur after Beginning Of Planning."@en ;
                     sh:severity sh:Violation ;
                 ] ;
                 sh:property [                               # Instant's chronological order within the Phase
                     sh:path occp:before ;                   
                     sh:class occp:SubmissionToReview ;
-                    sh:message "Wrong assignment (chronological order) of Edit Before Submission To Review or Submission To Review."@en ;
-                    sh:severity sh:Violation ;
-                ] ;
-                sh:property [                               # Instant has a date as time stamp.
-                    sh:path time:hasTime ;                  
-                    sh:minCount 1 ;
-                    sh:message "Missing date for Edit Before Submission To Review - min. count = 1."@en ;
+                    sh:message "Wrong chronological order: Edit Before Submission To Review must occur before Submission To Review."@en ;
                     sh:severity sh:Violation ;
                 ] .
 
@@ -111,16 +89,18 @@
                         sh:severity sh:Violation ;
                     ]
                 ) ;
-                sh:property [                               # Instant has a date as time stamp.
-                    sh:path time:hasTime ;                  # Time stamp has to be set 
-                    sh:qualifiedValueShape [                # The following object properties are valid options to set time stamp
-                        sh:path (
-                        occp:hasEstimatedTime
-                        occp:hasActualTime
-                        ) ;
-                        sh:minCount 1 ;
-                        ] ;
-                    sh:message "Missing time stamp (Estimated or Actual Time) for Submission to Review - min. count = 1."@en ;
+                sh:property [
+                    sh:path occp:startsPhase ;
+                    sh:class occp:PhaseB_Review ;
+                    sh:maxCount 1 ;
+                    sh:message "SubmissionToReview can start at most one Phase B (Review)."@en ;
+                    sh:severity sh:Violation ;
+                ] ;
+                sh:property [
+                    sh:path occp:startsCycle ;
+                    sh:class occp:CycleA_PlanningReview ;
+                    sh:maxCount 1 ;
+                    sh:message "SubmissionToReview can start at most one Cycle A (Planning/Review)."@en ;
                     sh:severity sh:Violation ;
                 ] .
 
@@ -128,24 +108,16 @@
                 sh:targetClass occp:Edit_ASTR ;
                 sh:property [
                     sh:path occp:after ;
-                    sh:qualifiedValueShape [
-                        sh:path (
-                            sh:class occp:SubmissionToReview 
-                            sh:class occp:ReviewRejection
-                        ) ;
-                    ] ;
-                    sh:qualifiedMinCount 1 ;
-                    sh:message "Wrong assignment (Submission To Review/Edit After Submission To Review)."@en ;
+                    sh:class occp:SubmissionToReview ;
+                    sh:message "Edit_ASTR must occur after SubmissionToReview."@en ;
                     sh:severity sh:Violation ;
                 ] ;
-                sh:property [                               # Instant (Edit After Submission To Review) starts a new Cycle A (Planning/Review).
-                    sh:path occp:startsCycle ;              
-                    sh:class occp:CycleA_PlanningReview ;
-                ] ;
                 sh:property [
-                    sh:path time:hasTime ;                  # Instant needs a date as time stamp.
+                    sh:path occp:before ;
+                    sh:class occp:CompletionOfPlanning ;
+                    sh:message "Edit_ASTR should occur before CompletionOfPlanning."@en ;
+                    sh:severity sh:Warning ;
                 ] .
-
 
     ### PHASE B INSTANTS
         # PHASE ASSIGNMENT        
@@ -155,9 +127,11 @@
                 sh:property [
                     sh:path occp:hasPhase ;
                     sh:class occp:PhaseB_Review ;
-                    sh:message "Wrong Phase/Instant assignment - Instant should belong to Phase B (Review)."@en ;
+                    sh:minCount 1 ;
+                    sh:maxCount 1 ;
+                    sh:message "Each Phase B Instant must belong to exactly one Phase B (Review)."@en ;
                     sh:severity sh:Violation ;
-            ] .
+                ] .
 
         ### INSTANT SHAPES PHASE B - REVIEW
 
