@@ -1,0 +1,3454 @@
+@prefix sh:    <http://www.w3.org/ns/shacl#> .
+@prefix xsd:   <http://www.w3.org/2001/XMLSchema#> .
+@prefix ocp: <http://www.semanticweb.org/DigitalizeMe/ontologies/2025/3/OCP#> .
+@prefix occp: <http://www.semanticweb.org/DigitalizeMe/ontologies/2025/3/OCCP#> .
+@prefix time:  <http://www.w3.org/2006/time#> .
+@prefix ocsh:   <http://www.occpshape.de/shape#> .
+
+#################################################################
+#    SHACL Shapes
+#################################################################
+
+
+    ocsh:CycleAShape a sh:NodeShape ;
+        sh:targetClass occp:CycleA_PlanningReview ;
+        sh:property [
+            sh:path ocp:belongsToProcess ;
+            sh:class ocp:Process ;
+            sh:minCount 1 ;
+            sh:maxCount 1 ;
+            sh:message "Each 'occp:CycleA_PlanningReview' must belong to exactly one 'ocp:Process' via 'ocp:belongsToProcess'."@en ;
+            sh:severity sh:Violation
+        ] ;
+        # Constraint for hasActualBeginning
+        sh:property [
+            sh:path ocp:hasActualBeginning ;
+            sh:class occp:ReviewStart ;
+            sh:minCount 1 ;
+            sh:maxCount 1 ;
+            sh:message "Each 'occp:CycleA_PlanningReview' must have exactly one actual beginning via 'ocp:hasActualBeginning' referencing 'occp:ReviewStart'."@en ;
+            sh:severity sh:Violation
+        ] ;
+        # Constraint for end (at least one end: actual or estimated, restricted to ReviewApproval or ReviewRejection, max 1 actualEnd)
+        sh:property [
+            sh:path ocp:hasActualEnd ;
+            sh:or (
+                [ sh:class occp:ReviewApproval ]
+                [ sh:class occp:ReviewRejection ]
+            ) ;
+            sh:maxCount 1 ;
+            sh:message "Each 'occp:CycleA_PlanningReview' must have at most one 'ocp:hasActualEnd' referencing 'occp:ReviewApproval' or 'occp:ReviewRejection'."@en ;
+            sh:severity sh:Violation
+        ] ;
+        sh:property [
+            sh:path [ sh:alternativePath ( ocp:hasActualEnd ocp:hasEstimatedEnd ) ] ;
+            sh:or (
+                [ sh:class occp:ReviewApproval ]
+                [ sh:class occp:ReviewRejection ]
+            ) ;
+            sh:minCount 1 ;  
+            sh:message "Each 'occp:CycleA_PlanningReview' must have at least one end (either 'ocp:hasActualEnd' or 'ocp:hasEstimatedEnd') referencing 'occp:ReviewApproval' or 'occp:ReviewRejection'."@en ;
+            sh:severity sh:Violation
+        ] .
+
+    ocsh:ProcessShape a sh:NodeShape ;
+        sh:targetClass ocp:Process ;
+        # Each phase can only occur once within a process - except for Phase D - Usage !!   
+        sh:sparql [
+            sh:select """
+                PREFIX occp: <http://www.semanticweb.org/DigitalizeMe/ontologies/2025/3/OCCP#>
+                PREFIX ocp: <http://www.semanticweb.org/DigitalizeMe/ontologies/2025/3/OCP#>
+                SELECT $this ?phaseType
+                WHERE {
+                    $this ocp:belongsToPhase ?phase1 .
+                    $this ocp:belongsToPhase ?phase2 .
+                    FILTER (?phase1 != ?phase2)
+                    ?phase1 a ?phaseType .
+                    ?phase2 a ?phaseType .
+                    FILTER (?phaseType != occp:Phase && ?phaseType NOT IN (occp:PhaseD_Usage, occp:PhaseE_Warranty, occp:PhaseF_DesignLife, occp:PhaseK_Damage, occp:PhaseL_Repair))  # Exclude PhaseD_Usage & PhaseE_Warranty & PhaseK_Damage & PhaseL_Repair
+                }
+                GROUP BY $this ?phaseType
+                HAVING (COUNT(?phase1) > 1)
+            """ ;
+            sh:message "For 'ocp:Process': Each specific phase type (except 'occp:PhaseD_Usage', 'occp:PhaseE_Warranty', 'occp:PhaseK_Damage' and 'occp:PhaseL_Repair') must appear at most once within the process via 'ocp:belongsToPhase'."@en ;
+            sh:severity sh:Violation
+        ] .
+
+### PHASE RELATED SHACL SHAPES
+
+    ocsh:ShapeOfPhaseA a sh:NodeShape ;
+        sh:targetClass occp:PhaseA_Planning ;
+        # Ensure phase belongs to a process
+        sh:property [
+            sh:path ocp:belongsToProcess ;
+            sh:class ocp:Process ;
+            sh:minCount 1 ;
+            sh:maxCount 1 ;
+            sh:message "Each 'occp:PhaseA_Planning' must belong to exactly one 'ocp:Process' via 'ocp:belongsToProcess'."@en ;
+            sh:severity sh:Violation
+        ] ;
+        # Ensure PhaseA begins before PhaseB_Review in the same process (if PhaseB exists)
+        sh:sparql [
+            sh:select """
+                PREFIX occp: <http://www.semanticweb.org/DigitalizeMe/ontologies/2025/3/OCCP#>
+                PREFIX ocp: <http://www.semanticweb.org/DigitalizeMe/ontologies/2025/3/OCP#>
+                PREFIX time: <http://www.w3.org/2006/time#>
+                SELECT $this
+                WHERE {
+                    $this ocp:belongsToProcess ?process .
+                    $this ocp:hasActualBeginning ?startInstantA .
+                    ?startInstantA ocp:hasActualTime ?startA .
+                    ?phaseB a occp:PhaseB_Review .
+                    ?phaseB ocp:belongsToProcess ?process .
+                    ?phaseB ocp:hasActualBeginning ?startInstantB .
+                    ?startInstantB ocp:hasActualTime ?startB .
+                    FILTER (?startA >= ?startB)
+                }
+            """ ;
+            sh:message "For 'occp:PhaseA_Planning': Actual beginning time (ocp:hasActualBeginning) must be before 'occp:PhaseB_Review' in the same process."@en ;
+            sh:severity sh:Violation
+        ] ;
+        # Ensure PhaseA begins before PhaseC_Construction in the same process (if PhaseC exists)
+        sh:sparql [
+            sh:select """
+                PREFIX occp: <http://www.semanticweb.org/DigitalizeMe/ontologies/2025/3/OCCP#>
+                PREFIX ocp: <http://www.semanticweb.org/DigitalizeMe/ontologies/2025/3/OCP#>
+                PREFIX time: <http://www.w3.org/2006/time#>
+                SELECT $this
+                WHERE {
+                    $this ocp:belongsToProcess ?process .
+                    $this ocp:hasActualBeginning ?startInstantA .
+                    ?startInstantA ocp:hasActualTime ?startA .
+                    ?phaseC a occp:PhaseC_Construction .
+                    ?phaseC ocp:belongsToProcess ?process .
+                    ?phaseC ocp:hasActualBeginning ?startInstantC .
+                    ?startInstantC ocp:hasActualTime ?startC .
+                    FILTER (?startA >= ?startC)
+                }
+            """ ;
+            sh:message "For 'occp:PhaseA_Planning': Actual beginning time (ocp:hasActualBeginning) must be before 'occp:PhaseC_Construction' in the same process."@en ;
+            sh:severity sh:Violation
+        ] ;
+        # Ensure PhaseA ends before PhaseC_Construction begins in the same process (if PhaseC exists)
+        sh:sparql [
+            sh:select """
+                PREFIX occp: <http://www.semanticweb.org/DigitalizeMe/ontologies/2025/3/OCCP#>
+                PREFIX ocp: <http://www.semanticweb.org/DigitalizeMe/ontologies/2025/3/OCP#>
+                PREFIX time: <http://www.w3.org/2006/time#>
+                SELECT $this
+                WHERE {
+                    $this ocp:belongsToProcess ?process .
+                    $this ocp:hasActualEnd ?endInstantA .
+                    ?endInstantA ocp:hasActualTime ?endA .
+                    ?phaseC a occp:PhaseC_Construction .
+                    ?phaseC ocp:belongsToProcess ?process .
+                    ?phaseC ocp:hasActualBeginning ?startInstantC .
+                    ?startInstantC ocp:hasActualTime ?startC .
+                    FILTER (?endA >= ?startC)
+                }
+            """ ;
+            sh:message "For 'occp:PhaseA_Planning': Actual end time (ocp:hasActualEnd) must be before 'occp:PhaseC_Construction' begins in the same process."@en ;
+            sh:severity sh:Warning
+        ] ;
+        # Ensure PhaseA ends before CompletionOfConstruction in the same process (if Completion exists)
+        sh:sparql [
+            sh:select """
+                PREFIX occp: <http://www.semanticweb.org/DigitalizeMe/ontologies/2025/3/OCCP#>
+                PREFIX ocp: <http://www.semanticweb.org/DigitalizeMe/ontologies/2025/3/OCP#>
+                PREFIX time: <http://www.w3.org/2006/time#>
+                SELECT $this
+                WHERE {
+                    $this ocp:belongsToProcess ?process .
+                    $this ocp:hasActualEnd ?endInstantA .
+                    ?endInstantA ocp:hasActualTime ?endA .
+                    ?completion a occp:CompletionOfConstruction .
+                    ?completion ocp:belongsToPhase ?phase .
+                    ?phase ocp:belongsToProcess ?process .
+                    ?completion ocp:hasActualTime ?timeC .
+                    FILTER (?endA >= ?timeC)
+                }
+            """ ;
+            sh:message "For 'occp:PhaseA_Planning': Actual end time (ocp:hasActualEnd) must be before 'occp:CompletionOfConstruction' in the same process."@en ;
+            sh:severity sh:Violation
+        ] ;
+        # Constraint for hasActualBeginning
+        sh:property [
+            sh:path ocp:hasActualBeginning ;
+            sh:class occp:BeginningOfPlanning ;
+            sh:maxCount 1 ;
+            sh:message "Each 'occp:PhaseA_Planning' must have at most one actual beginning via 'ocp:hasActualBeginning' referencing 'occp:BeginningOfPlanning'."@en ;
+            sh:severity sh:Violation
+        ] ;
+        # Constraint for hasActualEnd
+        sh:property [
+            sh:path ocp:hasActualEnd ;
+            sh:or (
+                [ sh:class occp:ReviewApproval ]
+                [ sh:class occp:CompletionOfPlanning ]
+            ) ;
+            sh:maxCount 1 ;
+            sh:message "Each 'occp:PhaseA_Planning' must have at most one actual end via 'ocp:hasActualEnd' referencing 'occp:ReviewApproval' or 'occp:CompletionOfPlanning'."@en ;
+            sh:severity sh:Violation
+        ] .
+
+    ocsh:ShapeOfPhaseB a sh:NodeShape ;
+        sh:targetClass occp:PhaseB_Review ;
+        # Ensure phase belongs to a process
+        sh:property [
+            sh:path ocp:belongsToProcess ;
+            sh:class ocp:Process ;
+            sh:minCount 1 ;
+            sh:maxCount 1 ;
+            sh:message "Each 'occp:PhaseB_Review' must belong to exactly one 'ocp:Process' via 'ocp:belongsToProcess'."@en ;
+            sh:severity sh:Violation
+        ] ;
+        # Ensure PhaseB begins before PhaseC_Construction in the same process (if PhaseC exists)
+        sh:sparql [
+            sh:select """
+                PREFIX occp: <http://www.semanticweb.org/DigitalizeMe/ontologies/2025/3/OCCP#>
+                PREFIX ocp: <http://www.semanticweb.org/DigitalizeMe/ontologies/2025/3/OCP#>
+                PREFIX time: <http://www.w3.org/2006/time#>
+                SELECT $this
+                WHERE {
+                    $this ocp:belongsToProcess ?process .
+                    $this ocp:hasActualBeginning ?startInstantB .
+                    ?startInstantB ocp:hasActualTime ?startB .
+                    ?phaseC a occp:PhaseC_Construction .
+                    ?phaseC ocp:belongsToProcess ?process .
+                    ?phaseC ocp:hasActualBeginning ?startInstantC .
+                    ?startInstantC ocp:hasActualTime ?startC .
+                    FILTER (?startB >= ?startC)
+                }
+            """ ;
+            sh:message "For 'occp:PhaseB_Review': Actual beginning time (ocp:hasActualBeginning) must be before 'occp:PhaseC_Construction' in the same process."@en ;
+            sh:severity sh:Violation
+        ] ;
+        # Ensure PhaseB ends before PhaseC_Construction begins in the same process (if PhaseC exists)
+        sh:sparql [
+            sh:select """
+                PREFIX occp: <http://www.semanticweb.org/DigitalizeMe/ontologies/2025/3/OCCP#>
+                PREFIX ocp: <http://www.semanticweb.org/DigitalizeMe/ontologies/2025/3/OCP#>
+                PREFIX time: <http://www.w3.org/2006/time#>
+                SELECT $this
+                WHERE {
+                    $this ocp:belongsToProcess ?process .
+                    $this ocp:hasActualEnd ?endInstantB .
+                    ?endInstantB ocp:hasActualTime ?endB .
+                    ?phaseC a occp:PhaseC_Construction .
+                    ?phaseC ocp:belongsToProcess ?process .
+                    ?phaseC ocp:hasActualBeginning ?startInstantC .
+                    ?startInstantC ocp:hasActualTime ?startC .
+                    FILTER (?endB >= ?startC)
+                }
+            """ ;
+            sh:message "For 'occp:PhaseB_Review': Actual end time (ocp:hasActualEnd) must be before 'occp:PhaseC_Construction' begins in the same process."@en ;
+            sh:severity sh:Warning
+        ] ;
+        # Ensure PhaseB ends before or with CompletionOfPlanning in the same process (if Completion exists)
+        sh:sparql [
+            sh:select """
+                PREFIX occp: <http://www.semanticweb.org/DigitalizeMe/ontologies/2025/3/OCCP#>
+                PREFIX ocp: <http://www.semanticweb.org/DigitalizeMe/ontologies/2025/3/OCP#>
+                PREFIX time: <http://www.w3.org/2006/time#>
+                SELECT $this
+                WHERE {
+                    $this ocp:belongsToProcess ?process .
+                    $this ocp:hasActualEnd ?endInstantB .
+                    ?endInstantB ocp:hasActualTime ?endB .
+                    ?completion a occp:CompletionOfPlanning .
+                    ?completion ocp:belongsToPhase ?phase .
+                    ?phase ocp:belongsToProcess ?process .
+                    ?completion ocp:hasActualTime ?timeCOP .
+                    FILTER (?endB > ?timeCOP)
+                }
+            """ ;
+            sh:message "For 'occp:PhaseB_Review': Actual end time (ocp:hasActualEnd) must be before or with 'occp:CompletionOfPlanning' in the same process."@en ;
+            sh:severity sh:Violation
+        ] ;
+        # Constraint for hasActualBeginning
+        sh:property [
+            sh:path ocp:hasActualBeginning ;
+            sh:class occp:ReviewStart ;
+            sh:maxCount 1 ;
+            sh:message "Each 'occp:PhaseB_Review' must have at most one actual beginning via 'ocp:hasActualBeginning' referencing 'occp:ReviewStart'."@en ;
+            sh:severity sh:Violation
+        ] ;
+        # Constraint for hasActualEnd
+        sh:property [
+            sh:path ocp:hasActualEnd ;
+            sh:or (
+                [ sh:class occp:ReviewApproval ]
+                [ sh:class occp:CompletionOfPlanning ]
+            ) ;
+            sh:maxCount 1 ;
+            sh:message "Each 'occp:PhaseB_Review' must have at most one actual end via 'ocp:hasActualEnd' referencing 'occp:ReviewApproval' or 'occp:CompletionOfPlanning'."@en ;
+            sh:severity sh:Violation
+        ] .
+
+    ocsh:ShapeOfTransitionA a sh:NodeShape ;
+        sh:targetClass occp:CompletionOfPlanning ;
+        # Ensure transition belongs to exactly one process
+        sh:property [
+            sh:path ocp:belongsToProcess ;
+            sh:class ocp:Process ;
+            sh:minCount 1 ;
+            sh:maxCount 1 ;
+            sh:message "Each 'occp:CompletionOfPlanning' must belong to exactly one 'ocp:Process' via 'ocp:belongsToProcess'."@en ;
+            sh:severity sh:Violation
+        ] ;
+        # Ensure CompletionOfPlanning occurs before BeginOfTenderingProcess in the same process (if BeginOfTenderingProcess exists)
+        sh:sparql [
+            sh:select """
+                PREFIX occp: <http://www.semanticweb.org/DigitalizeMe/ontologies/2025/3/OCCP#>
+                PREFIX ocp: <http://www.semanticweb.org/DigitalizeMe/ontologies/2025/3/OCP#>
+                PREFIX time: <http://www.w3.org/2006/time#>
+                SELECT $this
+                WHERE {
+                    $this ocp:belongsToProcess ?process .
+                    $this ocp:hasActualTime ?timeCOP .
+                    ?beginTender a occp:BeginOfTenderingProcess .
+                    ?beginTender ocp:belongsToProcess ?process .
+                    ?beginTender ocp:hasActualTime ?startTender .
+                    FILTER (?timeCOP >= ?startTender)
+                }
+            """ ;
+            sh:message "For 'occp:CompletionOfPlanning': Actual time (ocp:hasActualTime) should occur before 'occp:BeginOfTenderingProcess' in the same process."@en ;
+            sh:severity sh:Warning
+        ] .
+
+    ocsh:ShapeOfTransitionB a sh:NodeShape ;
+        sh:targetClass occp:BeginOfTenderingProcess ;
+        # Ensure transition belongs to exactly one process
+        sh:property [
+            sh:path ocp:belongsToProcess ;
+            sh:class ocp:Process ;
+            sh:minCount 1 ;
+            sh:maxCount 1 ;
+            sh:message "Each 'occp:BeginOfTenderingProcess' must belong to exactly one 'ocp:Process' via 'ocp:belongsToProcess'."@en ;
+            sh:severity sh:Violation
+        ] ;
+        # Ensure BeginOfTenderingProcess occurs before Submission in the same process (if Submission exists)
+        sh:sparql [
+            sh:select """
+                PREFIX occp: <http://www.semanticweb.org/DigitalizeMe/ontologies/2025/3/OCCP#>
+                PREFIX ocp: <http://www.semanticweb.org/DigitalizeMe/ontologies/2025/3/OCP#>
+                PREFIX time: <http://www.w3.org/2006/time#>
+                SELECT $this
+                WHERE {
+                    $this ocp:belongsToProcess ?process .
+                    $this ocp:hasActualTime ?startTender .
+                    ?submission a occp:Submission .
+                    ?submission ocp:belongsToProcess ?process .
+                    ?submission ocp:hasActualTime ?timeSub .
+                    FILTER (?startTender >= ?timeSub)
+                }
+            """ ;
+            sh:message "For 'occp:BeginOfTenderingProcess': Actual time (ocp:hasActualTime) should occur before 'occp:Submission' in the same process."@en ;
+            sh:severity sh:Warning
+        ] .
+
+    ocsh:ShapeOfTransitionC a sh:NodeShape ;
+        sh:targetClass occp:Submission ;
+        # Ensure transition belongs to exactly one process
+        sh:property [
+            sh:path ocp:belongsToProcess ;
+            sh:class ocp:Process ;
+            sh:minCount 1 ;
+            sh:maxCount 1 ;
+            sh:message "Each 'occp:Submission' must belong to exactly one 'ocp:Process' via 'ocp:belongsToProcess'."@en ;
+            sh:severity sh:Violation
+        ] ;
+        # Ensure Submission occurs before PhaseC_Construction in the same process (if PhaseC exists)
+        sh:sparql [
+            sh:select """
+                PREFIX occp: <http://www.semanticweb.org/DigitalizeMe/ontologies/2025/3/OCCP#>
+                PREFIX ocp: <http://www.semanticweb.org/DigitalizeMe/ontologies/2025/3/OCP#>
+                PREFIX time: <http://www.w3.org/2006/time#>
+                SELECT $this
+                WHERE {
+                    $this ocp:belongsToProcess ?process .
+                    $this ocp:hasActualTime ?timeSub .
+                    ?phaseC a occp:PhaseC_Construction .
+                    ?phaseC ocp:belongsToProcess ?process .
+                    ?phaseC ocp:hasActualBeginning ?startInstantC .
+                    ?startInstantC ocp:hasActualTime ?startC .
+                    FILTER (?timeSub >= ?startC)
+                }
+            """ ;
+            sh:message "For 'occp:Submission': Actual time (ocp:hasActualTime) should occur before 'occp:PhaseC_Construction' begins in the same process."@en ;
+            sh:severity sh:Warning
+        ] .
+
+    ocsh:ShapeOfPhaseC a sh:NodeShape ;
+        sh:targetClass occp:PhaseC_Construction ;
+        # Ensure phase belongs to a process
+        sh:property [
+            sh:path ocp:belongsToProcess ;
+            sh:class ocp:Process ;
+            sh:minCount 1 ;
+            sh:maxCount 1 ;
+            sh:message "Each 'occp:PhaseC_Construction' must belong to exactly one 'ocp:Process' via 'ocp:belongsToProcess'."@en ;
+            sh:severity sh:Violation
+        ] ;
+        # Ensure PhaseC occurs after CompletionOfPlanning in the same process (if Completion exists)
+        sh:sparql [
+            sh:select """
+                PREFIX occp: <http://www.semanticweb.org/DigitalizeMe/ontologies/2025/3/OCCP#>
+                PREFIX ocp: <http://www.semanticweb.org/DigitalizeMe/ontologies/2025/3/OCP#>
+                PREFIX time: <http://www.w3.org/2006/time#>
+                SELECT $this
+                WHERE {
+                    $this ocp:belongsToProcess ?process .
+                    $this ocp:hasActualBeginning ?startInstantC .
+                    ?startInstantC ocp:hasActualTime ?startC .
+                    ?completion a occp:CompletionOfPlanning .
+                    ?completion ocp:belongsToProcess ?process .
+                    ?completion ocp:hasActualTime ?timeCOP .
+                    FILTER (?startC <= ?timeCOP)
+                }
+            """ ;
+            sh:message "For 'occp:PhaseC_Construction': Actual beginning time (ocp:hasActualBeginning) should occur after 'occp:CompletionOfPlanning' in the same process."@en ;
+            sh:severity sh:Warning
+        ] ;
+        # Ensure PhaseC occurs after Submission in the same process (if Submission exists)
+        sh:sparql [
+            sh:select """
+                PREFIX occp: <http://www.semanticweb.org/DigitalizeMe/ontologies/2025/3/OCCP#>
+                PREFIX ocp: <http://www.semanticweb.org/DigitalizeMe/ontologies/2025/3/OCP#>
+                PREFIX time: <http://www.w3.org/2006/time#>
+                SELECT $this
+                WHERE {
+                    $this ocp:belongsToProcess ?process .
+                    $this ocp:hasActualBeginning ?startInstantC .
+                    ?startInstantC ocp:hasActualTime ?startC .
+                    ?submission a occp:Submission .
+                    ?submission ocp:belongsToProcess ?process .
+                    ?submission ocp:hasActualTime ?timeSub .
+                    FILTER (?startC <= ?timeSub)
+                }
+            """ ;
+            sh:message "For 'occp:PhaseC_Construction': Actual beginning time (ocp:hasActualBeginning) should occur after 'occp:Submission' in the same process."@en ;
+            sh:severity sh:Warning
+        ] ;
+        # Constraint for hasActualBeginning
+        sh:property [
+            sh:path ocp:hasActualBeginning ;
+            sh:class occp:ConstructionStart ;
+            sh:maxCount 1 ;
+            sh:message "Each 'occp:PhaseC_Construction' must have at most one actual beginning via 'ocp:hasActualBeginning' referencing 'occp:ConstructionStart'."@en ;
+            sh:severity sh:Violation
+        ] ;
+        # Constraint for hasActualEnd
+        sh:property [
+            sh:path ocp:hasActualEnd ;
+            sh:or (
+                [ sh:class occp:ConstructionAcceptance ]
+                [ sh:class occp:CompletionOfConstruction ]
+            ) ;
+            sh:maxCount 1 ;
+            sh:message "Each 'occp:PhaseC_Construction' must have at most one actual end via 'ocp:hasActualEnd' referencing 'occp:ConstructionAcceptance' or 'occp:CompletionOfConstruction'."@en ;
+            sh:severity sh:Violation
+        ] .
+
+    ocsh:ShapeOfTransitionD a sh:NodeShape ;
+        sh:targetClass occp:CompletionOfConstruction ;
+        # Ensure transition belongs to exactly one process
+        sh:property [
+            sh:path ocp:belongsToProcess ;
+            sh:class ocp:Process ;
+            sh:minCount 1 ;
+            sh:maxCount 1 ;
+            sh:message "Each 'occp:CompletionOfConstruction' must belong to exactly one 'ocp:Process' via 'ocp:belongsToProcess'."@en ;
+            sh:severity sh:Violation
+        ] ;
+        # Ensure CompletionOfConstruction occurs after CompletionOfPlanning in the same process (if CompletionOfPlanning exists)
+        sh:sparql [
+            sh:select """
+                PREFIX occp: <http://www.semanticweb.org/DigitalizeMe/ontologies/2025/3/OCCP#>
+                PREFIX ocp: <http://www.semanticweb.org/DigitalizeMe/ontologies/2025/3/OCP#>
+                PREFIX time: <http://www.w3.org/2006/time#>
+                SELECT $this
+                WHERE {
+                    $this ocp:belongsToProcess ?process .
+                    $this ocp:hasActualTime ?timeCOC .
+                    ?completionPlanning a occp:CompletionOfPlanning .
+                    ?completionPlanning ocp:belongsToProcess ?process .
+                    ?completionPlanning ocp:hasActualTime ?timeCOP .
+                    FILTER (?timeCOC <= ?timeCOP)
+                }
+            """ ;
+            sh:message "For 'occp:CompletionOfConstruction': Actual time (ocp:hasActualTime) should occur after 'occp:CompletionOfPlanning' in the same process."@en ;
+            sh:severity sh:Warning
+        ] ;
+        # Ensure CompletionOfConstruction occurs before PhaseD_Usage in the same process (if PhaseD exists)
+        sh:sparql [
+            sh:select """
+                PREFIX occp: <http://www.semanticweb.org/DigitalizeMe/ontologies/2025/3/OCCP#>
+                PREFIX ocp: <http://www.semanticweb.org/DigitalizeMe/ontologies/2025/3/OCP#>
+                PREFIX time: <http://www.w3.org/2006/time#>
+                SELECT $this
+                WHERE {
+                    $this ocp:belongsToProcess ?process .
+                    $this ocp:hasActualTime ?timeCOC .
+                    ?phaseD a occp:PhaseD_Usage .
+                    ?phaseD ocp:belongsToProcess ?process .
+                    ?phaseD ocp:hasActualBeginning ?startInstantD .
+                    ?startInstantD ocp:hasActualTime ?startD .
+                    FILTER (?timeCOC >= ?startD)
+                }
+            """ ;
+            sh:message "For 'occp:CompletionOfConstruction': Actual time (ocp:hasActualTime) should occur before 'occp:PhaseD_Usage' begins in the same process."@en ;
+            sh:severity sh:Warning
+        ] ;
+        # Ensure CompletionOfConstruction occurs before PhaseM_Deconstruction in the same process (if PhaseM exists)
+        sh:sparql [
+            sh:select """
+                PREFIX occp: <http://www.semanticweb.org/DigitalizeMe/ontologies/2025/3/OCCP#>
+                PREFIX ocp: <http://www.semanticweb.org/DigitalizeMe/ontologies/2025/3/OCP#>
+                PREFIX time: <http://www.w3.org/2006/time#>
+                SELECT $this
+                WHERE {
+                    $this ocp:belongsToProcess ?process .
+                    $this ocp:hasActualTime ?timeCOC .
+                    ?phaseM a occp:PhaseM_Deconstruction .
+                    ?phaseM ocp:belongsToProcess ?process .
+                    ?phaseM ocp:hasActualBeginning ?startInstantM .
+                    ?startInstantM ocp:hasActualTime ?startM .
+                    FILTER (?timeCOC >= ?startM)
+                }
+            """ ;
+            sh:message "For 'occp:CompletionOfConstruction': Actual time (ocp:hasActualTime) should occur before 'occp:PhaseM_Deconstruction' begins in the same process."@en ;
+            sh:severity sh:Warning
+        ] .
+
+    ocsh:ShapeOfPhaseD a sh:NodeShape ;
+        sh:targetClass occp:PhaseD_Usage ;
+        # Ensure phase belongs to exactly one process
+        sh:property [
+            sh:path ocp:belongsToProcess ;
+            sh:class ocp:Process ;
+            sh:minCount 1 ;
+            sh:maxCount 1 ;
+            sh:message "Each 'occp:PhaseD_Usage' must belong to exactly one 'ocp:Process' via 'ocp:belongsToProcess'."@en ;
+            sh:severity sh:Violation
+        ] ;
+        # Ensure PhaseD occurs after CompletionOfConstruction in the same process (if Completion exists)
+        sh:sparql [
+            sh:select """
+                PREFIX occp: <http://www.semanticweb.org/DigitalizeMe/ontologies/2025/3/OCCP#>
+                PREFIX ocp: <http://www.semanticweb.org/DigitalizeMe/ontologies/2025/3/OCP#>
+                PREFIX time: <http://www.w3.org/2006/time#>
+                SELECT $this
+                WHERE {
+                    $this ocp:belongsToProcess ?process .
+                    $this ocp:hasActualBeginning ?startInstantD .
+                    ?startInstantD ocp:hasActualTime ?startD .
+                    ?completionC a occp:CompletionOfConstruction .
+                    ?completionC ocp:belongsToProcess ?process .
+                    ?completionC ocp:hasActualTime ?timeCOC .
+                    FILTER (?startD <= ?timeCOC)
+                }
+            """ ;
+            sh:message "For 'occp:PhaseD_Usage': Actual beginning time (ocp:hasActualBeginning) should occur after 'occp:CompletionOfConstruction' in the same process."@en ;
+            sh:severity sh:Warning
+        ] ;
+        # Ensure PhaseD ends before PhaseM_Deconstruction in the same process (if PhaseM exists)
+        sh:sparql [
+            sh:select """
+                PREFIX occp: <http://www.semanticweb.org/DigitalizeMe/ontologies/2025/3/OCCP#>
+                PREFIX ocp: <http://www.semanticweb.org/DigitalizeMe/ontologies/2025/3/OCP#>
+                PREFIX time: <http://www.w3.org/2006/time#>
+                SELECT $this
+                WHERE {
+                    $this ocp:belongsToProcess ?process .
+                    $this ocp:hasActualEnd ?endInstantD .
+                    ?endInstantD ocp:hasActualTime ?endD .
+                    ?phaseM a occp:PhaseM_Deconstruction .
+                    ?phaseM ocp:belongsToProcess ?process .
+                    ?phaseM ocp:hasActualBeginning ?startInstantM .
+                    ?startInstantM ocp:hasActualTime ?startM .
+                    FILTER (?endD >= ?startM)
+                }
+            """ ;
+            sh:message "For 'occp:PhaseD_Usage': Actual end time (ocp:hasActualEnd) should end before 'occp:PhaseM_Deconstruction' begins in the same process. We don’t want anyone to get hurt, do we?"@en ;
+            sh:severity sh:Warning
+        ] ;
+        # Constraint for hasActualBeginning
+        sh:property [
+            sh:path ocp:hasActualBeginning ;
+            sh:or (
+                [ sh:class occp:UsageStart ]
+                [ sh:class occp:UsageChange ]
+            ) ;
+            sh:maxCount 1 ;
+            sh:message "Each 'occp:PhaseD_Usage' must have at most one actual beginning via 'ocp:hasActualBeginning' referencing 'occp:UsageStart' or 'occp:UsageChange'."@en ;
+            sh:severity sh:Violation
+        ] ;
+        # Constraint for hasActualEnd
+        sh:property [
+            sh:path ocp:hasActualEnd ;
+            sh:or (
+                [ sh:class occp:UsageEnd ]
+                [ sh:class occp:UsageChange ]
+            ) ;
+            sh:maxCount 1 ;
+            sh:message "Each 'occp:PhaseD_Usage' must have at most one actual end via 'ocp:hasActualEnd' referencing 'occp:UsageEnd' or 'occp:UsageChange'."@en ;
+            sh:severity sh:Violation
+        ] .
+
+    ocsh:ShapeOfPhaseE a sh:NodeShape ;
+        sh:targetClass occp:PhaseE_Warranty ;
+        # Ensure phase belongs to exactly one process
+        sh:property [
+            sh:path ocp:belongsToProcess ;
+            sh:class ocp:Process ;
+            sh:minCount 1 ;
+            sh:maxCount 1 ;
+            sh:message "Each 'occp:PhaseE_Warranty' must belong to exactly one 'ocp:Process' via 'ocp:belongsToProcess'."@en ;
+            sh:severity sh:Violation
+        ] ;
+        # Ensure PhaseE occurs after CompletionOfConstruction in the same process (if CompletionOfConstruction exists)
+        sh:sparql [
+            sh:select """
+                PREFIX occp: <http://www.semanticweb.org/DigitalizeMe/ontologies/2025/3/OCCP#>
+                PREFIX ocp: <http://www.semanticweb.org/DigitalizeMe/ontologies/2025/3/OCP#>
+                PREFIX time: <http://www.w3.org/2006/time#>
+                SELECT $this
+                WHERE {
+                    $this ocp:belongsToProcess ?process .
+                    $this ocp:hasActualBeginning ?startInstantE .
+                    ?startInstantE ocp:hasActualTime ?startE .
+                    ?completion a occp:CompletionOfConstruction .
+                    ?completion ocp:belongsToProcess ?process .
+                    ?completion ocp:hasActualTime ?timeCOC .
+                    FILTER (?startE <= ?timeCOC)
+                }
+            """ ;
+            sh:message "For 'occp:PhaseE_Warranty': Actual beginning time (ocp:hasActualBeginning) should occur after 'occp:CompletionOfConstruction' in the same process."@en ;
+            sh:severity sh:Warning
+        ] ;
+        # Constraint for hasActualBeginning
+        sh:property [
+            sh:path ocp:hasActualBeginning ;
+            sh:or (
+                [ sh:class occp:WarrantyStart ]
+                [ sh:class occp:WarrantyChange ]
+            ) ;
+            sh:maxCount 1 ;
+            sh:message "Each 'occp:PhaseE_Warranty' must have at most one actual beginning via 'ocp:hasActualBeginning' referencing 'occp:WarrantyStart' or 'occp:WarrantyChange'."@en ;
+            sh:severity sh:Violation
+        ] ;
+        # Constraint for hasActualEnd
+        sh:property [
+            sh:path ocp:hasActualEnd ;
+            sh:or (
+                [ sh:class occp:WarrantyEnd ]
+                [ sh:class occp:WarrantyChange ]
+            ) ;
+            sh:maxCount 1 ;
+            sh:message "Each 'occp:PhaseE_Warranty' must have at most one actual end via 'ocp:hasActualEnd' referencing 'occp:WarrantyEnd' or 'occp:WarrantyChange'."@en ;
+            sh:severity sh:Violation
+        ] .
+
+    ocsh:ShapeOfPhaseF a sh:NodeShape ;
+        sh:targetClass occp:PhaseF_DesignLife ;
+        # Ensure phase belongs to exactly one process
+        sh:property [
+            sh:path ocp:belongsToProcess ;
+            sh:class ocp:Process ;
+            sh:minCount 1 ;
+            sh:maxCount 1 ;
+            sh:message "Each 'occp:PhaseF_DesignLife' must belong to exactly one 'ocp:Process' via 'ocp:belongsToProcess'."@en ;
+            sh:severity sh:Violation
+        ] ;
+        # Ensure PhaseF occurs after CompletionOfConstruction in the same process (if Completion exists)
+        sh:sparql [
+            sh:select """
+                PREFIX occp: <http://www.semanticweb.org/DigitalizeMe/ontologies/2025/3/OCCP#>
+                PREFIX ocp: <http://www.semanticweb.org/DigitalizeMe/ontologies/2025/3/OCP#>
+                PREFIX time: <http://www.w3.org/2006/time#>
+                SELECT $this
+                WHERE {
+                    $this ocp:belongsToProcess ?process .
+                    $this ocp:hasActualBeginning ?startInstantF .
+                    ?startInstantF ocp:hasActualTime ?startF .
+                    ?completion a occp:CompletionOfConstruction .
+                    ?completion ocp:belongsToProcess ?process .
+                    ?completion ocp:hasActualTime ?timeCOC .
+                    FILTER (?startF <= ?timeCOC)
+                }
+            """ ;
+            sh:message "For 'occp:PhaseF_DesignLife': Actual beginning time (ocp:hasActualBeginning) should occur after 'occp:CompletionOfConstruction' in the same process."@en ;
+            sh:severity sh:Warning
+        ] ;
+        # Ensure PhaseF begins before or with PhaseD_Usage in the same process (if PhaseD exists)
+        sh:sparql [
+            sh:select """
+                PREFIX occp: <http://www.semanticweb.org/DigitalizeMe/ontologies/2025/3/OCCP#>
+                PREFIX ocp: <http://www.semanticweb.org/DigitalizeMe/ontologies/2025/3/OCP#>
+                PREFIX time: <http://www.w3.org/2006/time#>
+                SELECT $this
+                WHERE {
+                    $this ocp:belongsToProcess ?process .
+                    $this ocp:hasActualBeginning ?startInstantF .
+                    ?startInstantF ocp:hasActualTime ?startF .
+                    ?phaseD a occp:PhaseD_Usage .
+                    ?phaseD ocp:belongsToProcess ?process .
+                    ?phaseD ocp:hasActualBeginning ?startInstantD .
+                    ?startInstantD ocp:hasActualTime ?startD .
+                    FILTER (?startF > ?startD)
+                }
+            """ ;
+            sh:message "For 'occp:PhaseF_DesignLife': Actual beginning time (ocp:hasActualBeginning) should begin before or with 'occp:PhaseD_Usage' in the same process."@en ;
+            sh:severity sh:Warning
+        ] ;
+        # Ensure PhaseF ends before PhaseM_Deconstruction begins in the same process (if PhaseM exists)
+        sh:sparql [
+            sh:select """
+                PREFIX occp: <http://www.semanticweb.org/DigitalizeMe/ontologies/2025/3/OCCP#>
+                PREFIX ocp: <http://www.semanticweb.org/DigitalizeMe/ontologies/2025/3/OCP#>
+                PREFIX time: <http://www.w3.org/2006/time#>
+                SELECT $this
+                WHERE {
+                    $this ocp:belongsToProcess ?process .
+                    $this ocp:hasActualEnd ?endInstantF .
+                    ?endInstantF ocp:hasActualTime ?endF .
+                    ?phaseM a occp:PhaseM_Deconstruction .
+                    ?phaseM ocp:belongsToProcess ?process .
+                    ?phaseM ocp:hasActualBeginning ?startInstantM .
+                    ?startInstantM ocp:hasActualTime ?startM .
+                    FILTER (?endF >= ?startM)
+                }
+            """ ;
+            sh:message "For 'occp:PhaseF_DesignLife': Actual end time (ocp:hasActualEnd) should occur before 'occp:PhaseM_Deconstruction' begins in the same process."@en ;
+            sh:severity sh:Warning
+        ] ;
+        # Constraint for hasActualBeginning
+        sh:property [
+            sh:path ocp:hasActualBeginning ;
+            sh:or (
+                [ sh:class occp:DesignLifeStart ]
+                [ sh:class occp:DesignLifeChange ]
+            ) ;
+            sh:maxCount 1 ;
+            sh:message "Each 'occp:PhaseF_DesignLife' must have at most one actual beginning via 'ocp:hasActualBeginning' referencing 'occp:DesignLifeStart' or 'occp:DesignLifeChange'."@en ;
+            sh:severity sh:Violation
+        ] ;
+        # Constraint for hasActualEnd
+        sh:property [
+            sh:path ocp:hasActualEnd ;
+            sh:or (
+                [ sh:class occp:DesignLifeEnd ]
+                [ sh:class occp:DesignLifeChange ]
+            ) ;
+            sh:maxCount 1 ;
+            sh:message "Each 'occp:PhaseF_DesignLife' must have at most one actual end via 'ocp:hasActualEnd' referencing 'occp:DesignLifeEnd' or 'occp:DesignLifeChange'."@en ;
+            sh:severity sh:Violation
+        ] .
+
+    ocsh:ShapeOfPhaseG a sh:NodeShape ;
+        sh:targetClass occp:PhaseG_Inspection ;
+        # Ensure phase belongs to a process
+        sh:property [
+            sh:path ocp:belongsToProcess ;
+            sh:class ocp:Process ;
+            sh:minCount 1 ;
+            sh:maxCount 1 ;
+            sh:message "Each 'occp:PhaseG_Inspection' must belong to exactly one 'ocp:Process' via 'ocp:belongsToProcess'."@en ;
+            sh:severity sh:Violation
+        ] ;
+        # Ensure PhaseG begins with or after UsageStart in the same process (if UsageStart exists)
+        sh:sparql [
+            sh:select """
+                PREFIX occp: <http://www.semanticweb.org/DigitalizeMe/ontologies/2025/3/OCCP#>
+                PREFIX ocp: <http://www.semanticweb.org/DigitalizeMe/ontologies/2025/3/OCP#>
+                PREFIX time: <http://www.w3.org/2006/time#>
+                SELECT $this
+                WHERE {
+                    $this ocp:belongsToProcess ?process .
+                    $this ocp:hasActualBeginning ?startInstantG .
+                    ?startInstantG ocp:hasActualTime ?startG .
+                    ?usageStart a occp:UsageStart .
+                    ?usageStart ocp:belongsToProcess ?process .
+                    ?usageStart ocp:hasActualTime ?timeUS .
+                    FILTER (?startG < ?timeUS)
+                }
+            """ ;
+            sh:message "For 'occp:PhaseG_Inspection': Actual beginning time (ocp:hasActualBeginning) must be with or after 'occp:UsageStart' in the same process."@en ;
+            sh:severity sh:Violation
+        ] ;
+        # Ensure PhaseG occurs after CompletionOfConstruction in the same process (if CompletionOfConstruction exists)
+        sh:sparql [
+            sh:select """
+                PREFIX occp: <http://www.semanticweb.org/DigitalizeMe/ontologies/2025/3/OCCP#>
+                PREFIX ocp: <http://www.semanticweb.org/DigitalizeMe/ontologies/2025/3/OCP#>
+                PREFIX time: <http://www.w3.org/2006/time#>
+                SELECT $this
+                WHERE {
+                    $this ocp:belongsToProcess ?process .
+                    $this ocp:hasActualBeginning ?startInstantG .
+                    ?startInstantG ocp:hasActualTime ?startG .
+                    ?completion a occp:CompletionOfConstruction .
+                    ?completion ocp:belongsToProcess ?process .
+                    ?completion ocp:hasActualTime ?timeCOC .
+                    FILTER (?startG <= ?timeCOC)
+                }
+            """ ;
+            sh:message "For 'occp:PhaseG_Inspection': Actual beginning time (ocp:hasActualBeginning) should occur after 'occp:CompletionOfConstruction' in the same process."@en ;
+            sh:severity sh:Warning
+        ] ;
+        # Ensure PhaseG occurs before PhaseM_Deconstruction in the same process (if PhaseM exists)
+        sh:sparql [
+            sh:select """
+                PREFIX occp: <http://www.semanticweb.org/DigitalizeMe/ontologies/2025/3/OCCP#>
+                PREFIX ocp: <http://www.semanticweb.org/DigitalizeMe/ontologies/2025/3/OCP#>
+                PREFIX time: <http://www.w3.org/2006/time#>
+                SELECT $this
+                WHERE {
+                    $this ocp:belongsToProcess ?process .
+                    $this ocp:hasActualEnd ?endInstantG .
+                    ?endInstantG ocp:hasActualTime ?endG .
+                    ?phaseM a occp:PhaseM_Deconstruction .
+                    ?phaseM ocp:belongsToProcess ?process .
+                    ?phaseM ocp:hasActualBeginning ?startInstantM .
+                    ?startInstantM ocp:hasActualTime ?startM .
+                    FILTER (?endG >= ?startM)
+                }
+            """ ;
+            sh:message "For 'occp:PhaseG_Inspection': Actual end time (ocp:hasActualEnd) should occur before 'occp:PhaseM_Deconstruction' begins in the same process."@en ;
+            sh:severity sh:Warning
+        ] ;
+        # Constraint for hasActualBeginning
+        sh:property [
+            sh:path ocp:hasActualBeginning ;
+            sh:class occp:InspectionExecution ;
+            sh:maxCount 1 ;
+            sh:message "Each 'occp:PhaseG_Inspection' must have at most one actual beginning via 'ocp:hasActualBeginning' referencing 'occp:InspectionExecution'."@en ;
+            sh:severity sh:Violation
+        ] ;
+        # Constraint for hasActualEnd
+        sh:property [
+            sh:path ocp:hasActualEnd ;
+            sh:class time:Instant ;
+            sh:maxCount 1 ;
+            sh:message "Each 'occp:PhaseG_Inspection' must have at most one actual end via 'ocp:hasActualEnd' referencing a 'time:Instant'."@en ;
+            sh:severity sh:Violation
+        ] .
+
+    ocsh:ShapeOfPhaseH a sh:NodeShape ;              # Phase H (SpecialEvents) - Special events can occur anytime, so this is to be handled like a super-phase. It can be used to describe or record events that have shaped the landscape like earthquakes in the past, but also events that occur during or after the construction's life cycle.
+        sh:targetClass occp:PhaseH_SpecialEvents ;
+        # Ensure phase belongs to exactly one process
+        sh:property [
+            sh:path ocp:belongsToProcess ;
+            sh:class ocp:Process ;
+            sh:minCount 1 ;
+            sh:maxCount 1 ;
+            sh:message "Each 'occp:PhaseH_SpecialEvents' must belong to exactly one 'ocp:Process' via 'ocp:belongsToProcess'."@en ;
+            sh:severity sh:Violation
+        ] ;
+        # Ensure each PhaseH has at least one instant to mark specific events
+        sh:property [
+            sh:path ocp:containsInstant ;
+            sh:class time:Instant ;
+            sh:minCount 1 ;
+            sh:message "Each 'occp:PhaseH_SpecialEvents' must have at least one instant via 'ocp:containsInstant' referencing a 'time:Instant' (e.g., 'occp:GeologicalEvent', 'occp:WeatherEvent')."@en ;
+            sh:severity sh:Violation
+        ] ;
+        # Constraint for hasActualBeginning
+        sh:property [
+            sh:path ocp:hasActualBeginning ;
+            sh:class time:Instant ;
+            sh:maxCount 1 ;
+            sh:message "Each 'occp:PhaseH_SpecialEvents' must have at most one actual beginning via 'ocp:hasActualBeginning' referencing a 'time:Instant'."@en ;
+            sh:severity sh:Violation
+        ] ;
+        # Constraint for hasActualEnd
+        sh:property [
+            sh:path ocp:hasActualEnd ;
+            sh:class time:Instant ;
+            sh:maxCount 1 ;
+            sh:message "Each 'occp:PhaseH_SpecialEvents' must have at most one actual end via 'ocp:hasActualEnd' referencing a 'time:Instant'."@en ;
+            sh:severity sh:Violation
+        ] .
+
+    ocsh:ShapeOfPhaseK a sh:NodeShape ;
+        sh:targetClass occp:PhaseK_Damage ;
+        # Ensure phase belongs to exactly one process
+        sh:property [
+            sh:path ocp:belongsToProcess ;
+            sh:class ocp:Process ;
+            sh:minCount 1 ;
+            sh:maxCount 1 ;
+            sh:message "Each 'occp:PhaseK_Damage' must belong to exactly one 'ocp:Process' via 'ocp:belongsToProcess'."@en ;
+            sh:severity sh:Violation
+        ] ;
+        # Ensure PhaseK occurs after Submission in the same process (if Submission exists)
+        sh:sparql [
+            sh:select """
+                PREFIX occp: <http://www.semanticweb.org/DigitalizeMe/ontologies/2025/3/OCCP#>
+                PREFIX ocp: <http://www.semanticweb.org/DigitalizeMe/ontologies/2025/3/OCP#>
+                PREFIX time: <http://www.w3.org/2006/time#>
+                SELECT $this
+                WHERE {
+                    $this ocp:belongsToProcess ?process .
+                    $this ocp:hasActualBeginning ?startInstantK .
+                    ?startInstantK ocp:hasActualTime ?startK .
+                    ?submission a occp:Submission .
+                    ?submission ocp:belongsToProcess ?process .
+                    ?submission ocp:hasActualTime ?timeSub .
+                    FILTER (?startK <= ?timeSub)
+                }
+            """ ;
+            sh:message "For 'occp:PhaseK_Damage': Actual beginning time (ocp:hasActualBeginning) should occur after 'occp:Submission' in the same process."@en ;
+            sh:severity sh:Warning
+        ] ;
+        # Ensure PhaseK ends before CompletionOfDeconstruction in the same process (if CompletionOfDeconstruction exists)
+        sh:sparql [
+            sh:select """
+                PREFIX occp: <http://www.semanticweb.org/DigitalizeMe/ontologies/2025/3/OCCP#>
+                PREFIX ocp: <http://www.semanticweb.org/DigitalizeMe/ontologies/2025/3/OCP#>
+                PREFIX time: <http://www.w3.org/2006/time#>
+                SELECT $this
+                WHERE {
+                    $this ocp:belongsToProcess ?process .
+                    $this ocp:hasActualEnd ?endInstantK .
+                    ?endInstantK ocp:hasActualTime ?endK .
+                    ?completionDec a occp:CompletionOfDeconstruction .
+                    ?completionDec ocp:belongsToProcess ?process .
+                    ?completionDec ocp:hasActualTime ?timeCOD .
+                    FILTER (?endK >= ?timeCOD)
+                }
+            """ ;
+            sh:message "For 'occp:PhaseK_Damage': Actual end time (ocp:hasActualEnd) should occur before 'occp:CompletionOfDeconstruction' in the same process."@en ;
+            sh:severity sh:Warning
+        ] ;
+        # Ensure PhaseK begins before PhaseL_Repair in the same process (if PhaseL exists, with flexibility)
+        sh:sparql [
+            sh:select """
+                PREFIX occp: <http://www.semanticweb.org/DigitalizeMe/ontologies/2025/3/OCCP#>
+                PREFIX ocp: <http://www.semanticweb.org/DigitalizeMe/ontologies/2025/3/OCP#>
+                PREFIX time: <http://www.w3.org/2006/time#>
+                SELECT $this
+                WHERE {
+                    $this ocp:belongsToProcess ?process .
+                    $this ocp:hasActualBeginning ?startInstantK .
+                    ?startInstantK ocp:hasActualTime ?startK .
+                    ?phaseL a occp:PhaseL_Repair .
+                    ?phaseL ocp:belongsToProcess ?process .
+                    ?phaseL ocp:hasActualBeginning ?startInstantL .
+                    ?startInstantL ocp:hasActualTime ?startL .
+                    FILTER (?startK >= ?startL)
+                }
+            """ ;
+            sh:message "For 'occp:PhaseK_Damage': Actual beginning time (ocp:hasActualBeginning) should occur before 'occp:PhaseL_Repair' begins in the same process, but damage detection during repair is possible."@en ;
+            sh:severity sh:Warning
+        ] ;
+        # Constraint for hasActualBeginning
+        sh:property [
+            sh:path ocp:hasActualBeginning ;
+            sh:class occp:DamageDetection ;
+            sh:maxCount 1 ;
+            sh:message "Each 'occp:PhaseK_Damage' must have at most one actual beginning via 'ocp:hasActualBeginning' referencing 'occp:DamageDetection'."@en ;
+            sh:severity sh:Violation
+        ] ;
+        # Constraint for hasActualEnd
+        sh:property [
+            sh:path ocp:hasActualEnd ;
+            sh:class occp:DamageRepair ;
+            sh:maxCount 1 ;
+            sh:message "Each 'occp:PhaseK_Damage' must have at most one actual end via 'ocp:hasActualEnd' referencing a 'time:Instant'."@en ;
+            sh:severity sh:Violation
+        ] .
+
+    ocsh:ShapeOfPhaseL a sh:NodeShape ;
+        sh:targetClass occp:PhaseL_Repair ;
+        # Ensure phase belongs to exactly one process
+        sh:property [
+            sh:path ocp:belongsToProcess ;
+            sh:class ocp:Process ;
+            sh:minCount 1 ;
+            sh:maxCount 1 ;
+            sh:message "Each 'occp:PhaseL_Repair' must belong to exactly one 'ocp:Process' via 'ocp:belongsToProcess'."@en ;
+            sh:severity sh:Violation
+        ] ;
+        # Ensure PhaseL ends with or after PhaseK_Damage in the same process (if PhaseK exists)
+        sh:sparql [
+            sh:select """
+                PREFIX occp: <http://www.semanticweb.org/DigitalizeMe/ontologies/2025/3/OCCP#>
+                PREFIX ocp: <http://www.semanticweb.org/DigitalizeMe/ontologies/2025/3/OCP#>
+                PREFIX time: <http://www.w3.org/2006/time#>
+                SELECT $this
+                WHERE {
+                    $this ocp:belongsToProcess ?process .
+                    $this ocp:hasActualEnd ?endInstantL .
+                    ?endInstantL ocp:hasActualTime ?endL .
+                    ?phaseK a occp:PhaseK_Damage .
+                    ?phaseK ocp:belongsToProcess ?process .
+                    ?phaseK ocp:hasActualEnd ?endInstantK .
+                    ?endInstantK ocp:hasActualTime ?endK .
+                    FILTER (?endL < ?endK)
+                }
+            """ ;
+            sh:message "For 'occp:PhaseL_Repair': Actual end time (ocp:hasActualEnd) must be with or after 'occp:PhaseK_Damage' in the same process."@en ;
+            sh:severity sh:Violation
+        ] ;
+        # Ensure PhaseL occurs after Submission in the same process (if Submission exists)
+        sh:sparql [
+            sh:select """
+                PREFIX occp: <http://www.semanticweb.org/DigitalizeMe/ontologies/2025/3/OCCP#>
+                PREFIX ocp: <http://www.semanticweb.org/DigitalizeMe/ontologies/2025/3/OCP#>
+                PREFIX time: <http://www.w3.org/2006/time#>
+                SELECT $this
+                WHERE {
+                    $this ocp:belongsToProcess ?process .
+                    $this ocp:hasActualBeginning ?startInstantL .
+                    ?startInstantL ocp:hasActualTime ?startL .
+                    ?submission a occp:Submission .
+                    ?submission ocp:belongsToProcess ?process .
+                    ?submission ocp:hasActualTime ?timeSub .
+                    FILTER (?startL <= ?timeSub)
+                }
+            """ ;
+            sh:message "For 'occp:PhaseL_Repair': Actual beginning time (ocp:hasActualBeginning) should occur after 'occp:Submission' in the same process."@en ;
+            sh:severity sh:Warning
+        ] ;
+        # Ensure PhaseL ends before PhaseM_Deconstruction in the same process (if PhaseM exists)
+        sh:sparql [
+            sh:select """
+                PREFIX occp: <http://www.semanticweb.org/DigitalizeMe/ontologies/2025/3/OCCP#>
+                PREFIX ocp: <http://www.semanticweb.org/DigitalizeMe/ontologies/2025/3/OCP#>
+                PREFIX time: <http://www.w3.org/2006/time#>
+                SELECT $this
+                WHERE {
+                    $this ocp:belongsToProcess ?process .
+                    $this ocp:hasActualEnd ?endInstantL .
+                    ?endInstantL ocp:hasActualTime ?endL .
+                    ?phaseM a occp:PhaseM_Deconstruction .
+                    ?phaseM ocp:belongsToProcess ?process .
+                    ?phaseM ocp:hasActualBeginning ?startInstantM .
+                    ?startInstantM ocp:hasActualTime ?startM .
+                    FILTER (?endL >= ?startM)
+                }
+            """ ;
+            sh:message "For 'occp:PhaseL_Repair': Actual end time (ocp:hasActualEnd) should be before 'occp:PhaseM_Deconstruction' begins in the same process."@en ;
+            sh:severity sh:Warning
+        ] ;
+        # Constraint for hasActualBeginning
+        sh:property [
+            sh:path ocp:hasActualBeginning ;
+            sh:class occp:RepairStart ;
+            sh:maxCount 1 ;
+            sh:message "Each 'occp:PhaseL_Repair' must have at most one actual beginning via 'ocp:hasActualBeginning' referencing 'occp:RepairStart'."@en ;
+            sh:severity sh:Violation
+        ] ;
+        # Constraint for hasActualEnd
+        sh:property [
+            sh:path ocp:hasActualEnd ;
+            sh:class occp:RepairCompletion ;
+            sh:maxCount 1 ;
+            sh:message "Each 'occp:PhaseL_Repair' must have at most one actual end via 'ocp:hasActualEnd' referencing 'occp:RepairCompletion'."@en ;
+            sh:severity sh:Violation
+        ] .
+
+    ocsh:ShapeOfPhaseM a sh:NodeShape ;
+        sh:targetClass occp:PhaseM_Deconstruction ;
+        # Ensure phase belongs to exactly one process
+        sh:property [
+            sh:path ocp:belongsToProcess ;
+            sh:class ocp:Process ;
+            sh:minCount 1 ;
+            sh:maxCount 1 ;
+            sh:message "Each 'occp:PhaseM_Deconstruction' must belong to exactly one 'ocp:Process' via 'ocp:belongsToProcess'."@en ;
+            sh:severity sh:Violation
+        ] ;
+        # Ensure PhaseM occurs after CompletionOfConstruction in the same process (if CompletionOfConstruction exists)
+        sh:sparql [
+            sh:select """
+                PREFIX occp: <http://www.semanticweb.org/DigitalizeMe/ontologies/2025/3/OCCP#>
+                PREFIX ocp: <http://www.semanticweb.org/DigitalizeMe/ontologies/2025/3/OCP#>
+                PREFIX time: <http://www.w3.org/2006/time#>
+                SELECT $this
+                WHERE {
+                    $this ocp:belongsToProcess ?process .
+                    $this ocp:hasActualBeginning ?startInstantM .
+                    ?startInstantM ocp:hasActualTime ?startM .
+                    ?completionC a occp:CompletionOfConstruction .
+                    ?completionC ocp:belongsToProcess ?process .
+                    ?completionC ocp:hasActualTime ?timeCOC .
+                    FILTER (?startM <= ?timeCOC)
+                }
+            """ ;
+            sh:message "For 'occp:PhaseM_Deconstruction': Actual beginning time (ocp:hasActualBeginning) should occur after 'occp:CompletionOfConstruction' in the same process."@en ;
+            sh:severity sh:Warning
+        ] ;
+        # Constraint for hasActualBeginning
+        sh:property [
+            sh:path ocp:hasActualBeginning ;
+            sh:class occp:DeconstructionStart ;
+            sh:maxCount 1 ;
+            sh:message "Each 'occp:PhaseM_Deconstruction' must have at most one actual beginning via 'ocp:hasActualBeginning' referencing 'occp:DeconstructionStart'."@en ;
+            sh:severity sh:Violation
+        ] ;
+        # Constraint for hasActualEnd
+        sh:property [
+            sh:path ocp:hasActualEnd ;
+            sh:class occp:CompletionOfDeconstruction ;
+            sh:maxCount 1 ;
+            sh:message "Each 'occp:PhaseM_Deconstruction' must have at most one actual end via 'ocp:hasActualEnd' referencing 'occp:CompletionOfDeconstruction'."@en ;
+            sh:severity sh:Violation
+        ] .
+
+    ocsh:ShapeOfTransitionE a sh:NodeShape ;
+        sh:targetClass occp:CompletionOfDeconstruction ;
+        # Ensure transition belongs to exactly one process
+        sh:property [
+            sh:path ocp:belongsToProcess ;
+            sh:class ocp:Process ;
+            sh:minCount 1 ;
+            sh:maxCount 1 ;
+            sh:message "Each 'occp:CompletionOfDeconstruction' must belong to exactly one 'ocp:Process' via 'ocp:belongsToProcess'."@en ;
+            sh:severity sh:Violation
+        ] ;
+        # Ensure CompletionOfDeconstruction occurs after or with the end of PhaseM_Deconstruction in the same process (if PhaseM exists)
+        sh:sparql [
+            sh:select """
+                PREFIX occp: <http://www.semanticweb.org/DigitalizeMe/ontologies/2025/3/OCCP#>
+                PREFIX ocp: <http://www.semanticweb.org/DigitalizeMe/ontologies/2025/3/OCP#>
+                PREFIX time: <http://www.w3.org/2006/time#>
+                SELECT $this
+                WHERE {
+                    $this ocp:belongsToProcess ?process .
+                    $this ocp:hasActualTime ?timeCOD .
+                    ?phaseM a occp:PhaseM_Deconstruction .
+                    ?phaseM ocp:belongsToProcess ?process .
+                    ?phaseM ocp:hasActualEnd ?endInstantM .
+                    ?endInstantM ocp:hasActualTime ?endM .
+                    FILTER (?timeCOD < ?endM)
+                }
+            """ ;
+            sh:message "For 'occp:CompletionOfDeconstruction': Actual time (ocp:hasActualTime) must occur after or with the end of 'occp:PhaseM_Deconstruction' in the same process."@en ;
+            sh:severity sh:Violation
+        ] .
+
+
+### INSTANT RELATED SHACL RULES
+    ### PHASE A INSTANTS
+        # PHASE ASSIGNMENT
+
+            ocsh:PhaseAInstantShape a sh:NodeShape ;
+                sh:targetClass occp:PhaseA_Planning_Instant ;
+                sh:property [
+                    sh:path ocp:belongsToPhase ;
+                    sh:class occp:PhaseA_Planning ;
+                    sh:minCount 1 ;
+                    sh:maxCount 1 ;
+                    sh:message "Each 'occp:PhaseA_Planning_Instant' must belong to exactly one 'occp:PhaseA_Planning' via 'ocp:belongsToPhase'."@en ;
+                    sh:severity sh:Violation ;
+                ] .
+
+        ### INSTANT SHAPES PHASE A - PLANNING
+
+            ocsh:BeginningOfPlanningShape a sh:NodeShape ;
+                sh:targetClass occp:BeginningOfPlanning ;
+                # Instant starts a new Phase A (Planning)
+                sh:property [
+                    sh:path ocp:startsPhase ;
+                    sh:class occp:PhaseA_Planning ;
+                    sh:minCount 1 ;
+                    sh:maxCount 1 ;
+                    sh:message "Each 'occp:BeginningOfPlanning' must start exactly one 'occp:PhaseA_Planning' via 'ocp:startsPhase'."@en ;
+                    sh:severity sh:Violation
+                ] ;
+                # Ensure BeginningOfPlanning occurs before DataProcurement in the same phase
+                sh:sparql [
+                    sh:select """
+                        PREFIX occp: <http://www.semanticweb.org/DigitalizeMe/ontologies/2025/3/OCCP#>
+                        PREFIX ocp: <http://www.semanticweb.org/DigitalizeMe/ontologies/2025/3/OCP#>
+                        PREFIX time: <http://www.w3.org/2006/time#>
+                        SELECT $this
+                        WHERE {
+                            $this ocp:startsPhase ?phase .
+                            $this ocp:hasActualTime ?timeBOP .
+                            ?dataProc a occp:DataProcurement .
+                            ?dataProc ocp:belongsToPhase ?phase .
+                            ?dataProc ocp:hasActualTime ?timeDP .
+                            FILTER (?timeBOP >= ?timeDP)
+                        }
+                    """ ;
+                    sh:message "For 'occp:BeginningOfPlanning': Actual time (ocp:hasActualTime) must occur before 'occp:DataProcurement' in the same 'occp:PhaseA_Planning'."@en ;
+                    sh:severity sh:Violation
+                ] ;
+                # Ensure BeginningOfPlanning occurs before SubmissionToReview in the same phase
+                sh:sparql [
+                    sh:select """
+                        PREFIX occp: <http://www.semanticweb.org/DigitalizeMe/ontologies/2025/3/OCCP#>
+                        PREFIX ocp: <http://www.semanticweb.org/DigitalizeMe/ontologies/2025/3/OCP#>
+                        PREFIX time: <http://www.w3.org/2006/time#>
+                        SELECT $this
+                        WHERE {
+                            $this ocp:startsPhase ?phase .
+                            $this ocp:hasActualTime ?timeBOP .
+                            ?submission a occp:SubmissionToReview .
+                            ?submission ocp:belongsToPhase ?phase .
+                            ?submission ocp:hasActualTime ?timeSub .
+                            FILTER (?timeBOP >= ?timeSub)
+                        }
+                    """ ;
+                    sh:message "For 'occp:BeginningOfPlanning': Actual time (ocp:hasActualTime) should occur before 'occp:SubmissionToReview' in the same 'occp:PhaseA_Planning'."@en ;
+                    sh:severity sh:Warning
+                ] .
+
+            ocsh:DataProcurementShape a sh:NodeShape ;
+                sh:targetClass occp:DataProcurement ;
+                # Instant belongs to a Phase A (Planning)
+                sh:property [
+                    sh:path ocp:belongsToPhase ;
+                    sh:class occp:PhaseA_Planning ;
+                    sh:minCount 1 ;
+                    sh:maxCount 1 ;
+                    sh:message "Each 'occp:DataProcurement' must belong to exactly one 'occp:PhaseA_Planning' via 'ocp:belongsToPhase'."@en ;
+                    sh:severity sh:Violation
+                ] ;
+                # Ensure DataProcurement occurs after BeginningOfPlanning in the same phase
+                sh:sparql [
+                    sh:select """
+                        PREFIX occp: <http://www.semanticweb.org/DigitalizeMe/ontologies/2025/3/OCCP#>
+                        PREFIX ocp: <http://www.semanticweb.org/DigitalizeMe/ontologies/2025/3/OCP#>
+                        PREFIX time: <http://www.w3.org/2006/time#>
+                        SELECT $this
+                        WHERE {
+                            $this ocp:belongsToPhase ?phase .
+                            $this ocp:hasActualTime ?timeDP .
+                            ?beginPlanning a occp:BeginningOfPlanning .
+                            ?beginPlanning ocp:startsPhase ?phase .
+                            ?beginPlanning ocp:hasActualTime ?timeBOP .
+                            FILTER (?timeDP <= ?timeBOP)
+                        }
+                    """ ;
+                    sh:message "For 'occp:DataProcurement': Actual time (ocp:hasActualTime) must occur after 'occp:BeginningOfPlanning' in the same 'occp:PhaseA_Planning'."@en ;
+                    sh:severity sh:Violation
+                ] ;
+                # Ensure DataProcurement occurs before SubmissionToReview in the same phase
+                sh:sparql [
+                    sh:select """
+                        PREFIX occp: <http://www.semanticweb.org/DigitalizeMe/ontologies/2025/3/OCCP#>
+                        PREFIX ocp: <http://www.semanticweb.org/DigitalizeMe/ontologies/2025/3/OCP#>
+                        PREFIX time: <http://www.w3.org/2006/time#>
+                        SELECT $this
+                        WHERE {
+                            $this ocp:belongsToPhase ?phase .
+                            $this ocp:hasActualTime ?timeDP .
+                            ?submission a occp:SubmissionToReview .
+                            ?submission ocp:belongsToPhase ?phase .
+                            ?submission ocp:hasActualTime ?timeSub .
+                            FILTER (?timeDP >= ?timeSub)
+                        }
+                    """ ;
+                    sh:message "For 'occp:DataProcurement': Actual time (ocp:hasActualTime) should occur before 'occp:SubmissionToReview' in the same 'occp:PhaseA_Planning'."@en ;
+                    sh:severity sh:Warning
+                ] .
+
+            ocsh:EditBeforeSubmissionToReviewShape a sh:NodeShape ;
+                sh:targetClass occp:EditBeforeSubmissionToReview ;
+                # Instant belongs to a Phase A (Planning)
+                sh:property [
+                    sh:path ocp:belongsToPhase ;
+                    sh:class occp:PhaseA_Planning ;
+                    sh:minCount 1 ;
+                    sh:maxCount 1 ;
+                    sh:message "Each 'occp:EditBeforeSubmissionToReview' must belong to exactly one 'occp:PhaseA_Planning' via 'ocp:belongsToPhase'."@en ;
+                    sh:severity sh:Violation
+                ] ;
+                # Ensure EditBeforeSubmissionToReview occurs after BeginningOfPlanning in the same phase
+                sh:sparql [
+                    sh:select """
+                        PREFIX occp: <http://www.semanticweb.org/DigitalizeMe/ontologies/2025/3/OCCP#>
+                        PREFIX ocp: <http://www.semanticweb.org/DigitalizeMe/ontologies/2025/3/OCP#>
+                        PREFIX time: <http://www.w3.org/2006/time#>
+                        SELECT $this
+                        WHERE {
+                            $this ocp:belongsToPhase ?phase .
+                            $this ocp:hasActualTime ?timeEdit .
+                            ?beginPlanning a occp:BeginningOfPlanning .
+                            ?beginPlanning ocp:startsPhase ?phase .
+                            ?beginPlanning ocp:hasActualTime ?timeBOP .
+                            FILTER (?timeEdit <= ?timeBOP)
+                        }
+                    """ ;
+                    sh:message "For 'occp:EditBeforeSubmissionToReview': Actual time (ocp:hasActualTime) must occur after 'occp:BeginningOfPlanning' in the same 'occp:PhaseA_Planning'."@en ;
+                    sh:severity sh:Violation
+                ] ;
+                # Ensure EditBeforeSubmissionToReview occurs before SubmissionToReview in the same phase
+                sh:sparql [
+                    sh:select """
+                        PREFIX occp: <http://www.semanticweb.org/DigitalizeMe/ontologies/2025/3/OCCP#>
+                        PREFIX ocp: <http://www.semanticweb.org/DigitalizeMe/ontologies/2025/3/OCP#>
+                        PREFIX time: <http://www.w3.org/2006/time#>
+                        SELECT $this
+                        WHERE {
+                            $this ocp:belongsToPhase ?phase .
+                            $this ocp:hasActualTime ?timeEdit .
+                            ?submission a occp:SubmissionToReview .
+                            ?submission ocp:belongsToPhase ?phase .
+                            ?submission ocp:hasActualTime ?timeSub .
+                            FILTER (?timeEdit >= ?timeSub)
+                        }
+                    """ ;
+                    sh:message "For 'occp:EditBeforeSubmissionToReview': Actual time (ocp:hasActualTime) must occur before 'occp:SubmissionToReview' in the same 'occp:PhaseA_Planning'."@en ;
+                    sh:severity sh:Violation
+                ] .
+
+            ocsh:SubmissionToReviewShape a sh:NodeShape ;
+                sh:targetClass occp:SubmissionToReview ;
+                # Instant belongs to a Phase A (Planning)
+                sh:property [
+                    sh:path ocp:belongsToPhase ;
+                    sh:class occp:PhaseA_Planning ;
+                    sh:minCount 1 ;
+                    sh:maxCount 1 ;
+                    sh:message "Each 'occp:SubmissionToReview' must belong to exactly one 'occp:PhaseA_Planning' via 'ocp:belongsToPhase'."@en ;
+                    sh:severity sh:Violation
+                ] ;
+                # Ensure SubmissionToReview occurs after EditBeforeSubmissionToReview in the same phase (if EditBefore exists)
+                sh:sparql [
+                    sh:select """
+                        PREFIX occp: <http://www.semanticweb.org/DigitalizeMe/ontologies/2025/3/OCCP#>
+                        PREFIX ocp: <http://www.semanticweb.org/DigitalizeMe/ontologies/2025/3/OCP#>
+                        PREFIX time: <http://www.w3.org/2006/time#>
+                        SELECT $this
+                        WHERE {
+                            $this ocp:belongsToPhase ?phase .
+                            $this ocp:hasActualTime ?timeSub .
+                            ?editBefore a occp:EditBeforeSubmissionToReview .
+                            ?editBefore ocp:belongsToPhase ?phase .
+                            ?editBefore ocp:hasActualTime ?timeEdit .
+                            FILTER (?timeSub <= ?timeEdit)
+                        }
+                    """ ;
+                    sh:message "For 'occp:SubmissionToReview': Actual time (ocp:hasActualTime) must occur after 'occp:EditBeforeSubmissionToReview' in the same 'occp:PhaseA_Planning'."@en ;
+                    sh:severity sh:Violation
+                ] .
+
+            ocsh:EditAfterSubmissionToReviewShape a sh:NodeShape ;
+                sh:targetClass occp:EditAfterSubmissionToReview ;
+                # Instant belongs to a Phase A (Planning)
+                sh:property [
+                    sh:path ocp:belongsToPhase ;
+                    sh:class occp:PhaseA_Planning ;
+                    sh:minCount 1 ;
+                    sh:maxCount 1 ;
+                    sh:message "Each 'occp:EditAfterSubmissionToReview' must belong to exactly one 'occp:PhaseA_Planning' via 'ocp:belongsToPhase'."@en ;
+                    sh:severity sh:Violation
+                ] ;
+                # Ensure EditAfterSubmissionToReview occurs after at least one SubmissionToReview in the same phase
+                sh:sparql [
+                    sh:select """
+                        PREFIX occp: <http://www.semanticweb.org/DigitalizeMe/ontologies/2025/3/OCCP#>
+                        PREFIX ocp: <http://www.semanticweb.org/DigitalizeMe/ontologies/2025/3/OCP#>
+                        PREFIX time: <http://www.w3.org/2006/time#>
+                        SELECT $this
+                        WHERE {
+                            $this ocp:belongsToPhase ?phase .
+                            $this ocp:hasActualTime ?timeEdit .
+                            FILTER NOT EXISTS {
+                                ?submission a occp:SubmissionToReview .
+                                ?submission ocp:belongsToPhase ?phase .
+                                ?submission ocp:hasActualTime ?timeSub .
+                                FILTER (?timeEdit > ?timeSub)
+                            }
+                        }
+                    """ ;
+                    sh:message "For 'occp:EditAfterSubmissionToReview': Actual time (ocp:hasActualTime) must occur after at least one 'occp:SubmissionToReview' in the same 'occp:PhaseA_Planning'."@en ;
+                    sh:severity sh:Violation
+                ] ;
+                # Ensure EditAfterSubmissionToReview occurs before CompletionOfPlanning in the same phase (if Completion exists)
+                sh:sparql [
+                    sh:select """
+                        PREFIX occp: <http://www.semanticweb.org/DigitalizeMe/ontologies/2025/3/OCCP#>
+                        PREFIX ocp: <http://www.semanticweb.org/DigitalizeMe/ontologies/2025/3/OCP#>
+                        PREFIX time: <http://www.w3.org/2006/time#>
+                        SELECT $this
+                        WHERE {
+                            $this ocp:belongsToPhase ?phase .
+                            $this ocp:hasActualTime ?timeEdit .
+                            ?completion a occp:CompletionOfPlanning .
+                            ?completion ocp:endsPhase ?phase .
+                            ?completion ocp:hasActualTime ?timeCOP .
+                            FILTER (?timeEdit >= ?timeCOP)
+                        }
+                    """ ;
+                    sh:message "For 'occp:EditAfterSubmissionToReview': Actual time (ocp:hasActualTime) should occur before 'occp:CompletionOfPlanning' in the same 'occp:PhaseA_Planning'."@en ;
+                    sh:severity sh:Warning
+                ] .
+
+
+    ### PHASE B INSTANTS
+        # PHASE ASSIGNMENT        
+        
+            ocsh:PhaseBInstantShape a sh:NodeShape ;
+                sh:targetClass occp:PhaseB_Review_Instant ;
+                sh:property [
+                    sh:path ocp:belongsToPhase ;
+                    sh:class occp:PhaseB_Review ;
+                    sh:minCount 1 ;
+                    sh:maxCount 1 ;
+                    sh:message "Each 'occp:PhaseB_Review_Instant' must belong to exactly one 'occp:PhaseB_Review' via 'ocp:belongsToPhase'."@en ;
+                    sh:severity sh:Violation ;
+                ] .
+
+        ### INSTANT SHAPES PHASE B - REVIEW
+
+            ocsh:ReviewStartShape a sh:NodeShape ;
+                sh:targetClass occp:ReviewStart ;
+                # Instant starts a new Phase B (Review)
+                sh:property [
+                    sh:path ocp:startsPhase ;
+                    sh:class occp:PhaseB_Review ;
+                    sh:minCount 1 ;
+                    sh:maxCount 1 ;
+                    sh:message "Each 'occp:ReviewStart' must start exactly one 'occp:PhaseB_Review' via 'ocp:startsPhase'."@en ;
+                    sh:severity sh:Violation
+                ] ;
+                # Instant starts a CycleA_PlanningReview
+                sh:property [
+                    sh:path ocp:startsCycle ;
+                    sh:class occp:CycleA_PlanningReview ;
+                    sh:minCount 1 ;
+                    sh:maxCount 1 ;
+                    sh:message "Each 'occp:ReviewStart' must start exactly one 'occp:CycleA_PlanningReview' via 'ocp:startsCycle'."@en ;
+                    sh:severity sh:Violation
+                ] ;
+                # Ensure ReviewStart occurs before ReviewApproval in the same phase (if ReviewApproval exists)
+                sh:sparql [
+                    sh:select """
+                        PREFIX occp: <http://www.semanticweb.org/DigitalizeMe/ontologies/2025/3/OCCP#>
+                        PREFIX ocp: <http://www.semanticweb.org/DigitalizeMe/ontologies/2025/3/OCP#>
+                        PREFIX time: <http://www.w3.org/2006/time#>
+                        SELECT $this
+                        WHERE {
+                            $this ocp:startsPhase ?phase .
+                            $this ocp:hasActualTime ?timeRS .
+                            ?reviewApproval a occp:ReviewApproval .
+                            ?reviewApproval ocp:endsPhase ?phase .
+                            ?reviewApproval ocp:hasActualTime ?timeRA .
+                            FILTER (?timeRS >= ?timeRA)
+                        }
+                    """ ;
+                    sh:message "For 'occp:ReviewStart': Actual time (ocp:hasActualTime) must occur before 'occp:ReviewApproval' in the same 'occp:PhaseB_Review'."@en ;
+                    sh:severity sh:Violation
+                ] ;
+                # Ensure ReviewStart occurs before ReviewRejection in the same cycle (if ReviewRejection exists)
+                sh:sparql [
+                    sh:select """
+                        PREFIX occp: <http://www.semanticweb.org/DigitalizeMe/ontologies/2025/3/OCCP#>
+                        PREFIX ocp: <http://www.semanticweb.org/DigitalizeMe/ontologies/2025/3/OCP#>
+                        PREFIX time: <http://www.w3.org/2006/time#>
+                        SELECT $this
+                        WHERE {
+                            $this ocp:startsCycle ?cycle .
+                            $this ocp:hasActualTime ?timeRS .
+                            ?reviewRejection a occp:ReviewRejection .
+                            ?reviewRejection ocp:endsCycle ?cycle .
+                            ?reviewRejection ocp:hasActualTime ?timeRR .
+                            FILTER (?timeRS >= ?timeRR)
+                        }
+                    """ ;
+                    sh:message "For 'occp:ReviewStart': Actual time (ocp:hasActualTime) must occur before 'occp:ReviewRejection' in the same 'occp:CycleA_PlanningReview'."@en ;
+                    sh:severity sh:Violation
+                ] ;
+                # Ensure ReviewStart occurs after SubmissionToReview in the same process
+                sh:sparql [
+                    sh:select """
+                        PREFIX occp: <http://www.semanticweb.org/DigitalizeMe/ontologies/2025/3/OCCP#>
+                        PREFIX ocp: <http://www.semanticweb.org/DigitalizeMe/ontologies/2025/3/OCP#>
+                        PREFIX time: <http://www.w3.org/2006/time#>
+                        SELECT $this
+                        WHERE {
+                            $this ocp:startsPhase ?phase .
+                            ?phase ocp:belongsToProcess ?process .
+                            $this ocp:hasActualTime ?timeRS .
+                            ?submission a occp:SubmissionToReview .
+                            ?submission ocp:belongsToProcess ?process .
+                            ?submission ocp:hasActualTime ?timeSub .
+                            FILTER (?timeRS <= ?timeSub)
+                        }
+                    """ ;
+                    sh:message "For 'occp:ReviewStart': Actual time (ocp:hasActualTime) must occur after 'occp:SubmissionToReview' in the same process."@en ;
+                    sh:severity sh:Violation
+                ] .
+
+            ocsh:ReviewApprovalShape a sh:NodeShape ;
+                sh:targetClass occp:ReviewApproval ;
+                # Optional: endsPhase for PhaseB_Review, max 1
+                sh:sparql [
+                    sh:select """
+                        PREFIX occp: <http://www.semanticweb.org/DigitalizeMe/ontologies/2025/3/OCCP#>
+                        PREFIX ocp: <http://www.semanticweb.org/DigitalizeMe/ontologies/2025/3/OCP#>
+                        SELECT $this
+                        WHERE {
+                            $this ocp:endsPhase ?phaseB .
+                            ?phaseB a occp:PhaseB_Review .
+                            FILTER EXISTS {
+                                $this ocp:endsPhase ?otherPhaseB .
+                                ?otherPhaseB a occp:PhaseB_Review .
+                                FILTER (?otherPhaseB != ?phaseB)
+                            }
+                        }
+                    """ ;
+                    sh:message "Each 'occp:ReviewApproval' must end at most one 'occp:PhaseB_Review' via 'ocp:endsPhase'."@en ;
+                    sh:severity sh:Violation
+                ] ;
+                # Optional: endsPhase for PhaseA_Planning, max 1
+                sh:sparql [
+                    sh:select """
+                        PREFIX occp: <http://www.semanticweb.org/DigitalizeMe/ontologies/2025/3/OCCP#>
+                        PREFIX ocp: <http://www.semanticweb.org/DigitalizeMe/ontologies/2025/3/OCP#>
+                        SELECT $this
+                        WHERE {
+                            $this ocp:endsPhase ?phaseA .
+                            ?phaseA a occp:PhaseA_Planning .
+                            FILTER EXISTS {
+                                $this ocp:endsPhase ?otherPhaseA .
+                                ?otherPhaseA a occp:PhaseA_Planning .
+                                FILTER (?otherPhaseA != ?phaseA)
+                            }
+                        }
+                    """ ;
+                    sh:message "Each 'occp:ReviewApproval' must end at most one 'occp:PhaseA_Planning' via 'ocp:endsPhase'."@en ;
+                    sh:severity sh:Violation
+                ] ;
+                # Optional: endsCycle for CycleA_PlanningReview, max 1
+                sh:property [
+                    sh:path ocp:endsCycle ;
+                    sh:class occp:CycleA_PlanningReview ;
+                    sh:maxCount 1 ;
+                    sh:message "Each 'occp:ReviewApproval' must end at most one 'occp:CycleA_PlanningReview' via 'ocp:endsCycle'."@en ;
+                    sh:severity sh:Violation
+                ] ;    
+                # Ensure ReviewApproval occurs after ReviewStart in the same phase (if ReviewStart exists)
+                sh:sparql [
+                    sh:select """
+                        PREFIX occp: <http://www.semanticweb.org/DigitalizeMe/ontologies/2025/3/OCCP#>
+                        PREFIX ocp: <http://www.semanticweb.org/DigitalizeMe/ontologies/2025/3/OCP#>
+                        PREFIX time: <http://www.w3.org/2006/time#>
+                        SELECT $this
+                        WHERE {
+                            $this ocp:endsPhase ?phase .
+                            $this ocp:hasActualTime ?timeRA .
+                            ?reviewStart a occp:ReviewStart .
+                            ?reviewStart ocp:startsPhase ?phase .
+                            ?reviewStart ocp:hasActualTime ?timeRS .
+                            FILTER (?timeRA <= ?timeRS)
+                        }
+                    """ ;
+                    sh:message "For 'occp:ReviewApproval': Actual time (ocp:hasActualTime) must occur after 'occp:ReviewStart' in the same 'occp:PhaseB_Review'."@en ;
+                    sh:severity sh:Violation
+                ] .
+
+            ocsh:ReviewRejectionShape a sh:NodeShape ;
+                sh:targetClass occp:ReviewRejection ;
+                # Instant ends current Cycle A (Planning/Review)
+                sh:property [
+                    sh:path ocp:endsCycle ;
+                    sh:class occp:CycleA_PlanningReview ;
+                    sh:minCount 1 ;
+                    sh:maxCount 1 ;
+                    sh:message "Each 'occp:ReviewRejection' must end exactly one 'occp:CycleA_PlanningReview' via 'ocp:endsCycle'."@en ;
+                    sh:severity sh:Violation
+                ] ;
+                # Ensure ReviewRejection occurs after ReviewStart in the same cycle (if ReviewStart exists)
+                sh:sparql [
+                    sh:select """
+                        PREFIX occp: <http://www.semanticweb.org/DigitalizeMe/ontologies/2025/3/OCCP#>
+                        PREFIX ocp: <http://www.semanticweb.org/DigitalizeMe/ontologies/2025/3/OCP#>
+                        PREFIX time: <http://www.w3.org/2006/time#>
+                        SELECT $this
+                        WHERE {
+                            $this ocp:endsCycle ?cycle .
+                            $this ocp:hasActualTime ?timeRR .
+                            ?reviewStart a occp:ReviewStart .
+                            ?reviewStart ocp:startsCycle ?cycle .
+                            ?reviewStart ocp:hasActualTime ?timeRS .
+                            FILTER (?timeRR <= ?timeRS)
+                        }
+                    """ ;
+                    sh:message "For 'occp:ReviewRejection': Actual time (ocp:hasActualTime) must occur after 'occp:ReviewStart' in the same 'occp:CycleA_PlanningReview'."@en ;
+                    sh:severity sh:Violation
+                ] .
+
+    ### PHASE C INSTANTS
+        # PHASE ASSIGNMENT
+            ocsh:PhaseCInstantShape a sh:NodeShape ;
+                sh:targetClass occp:PhaseC_Construction_Instant ;
+                sh:property [
+                    sh:path ocp:belongsToPhase ;
+                    sh:class occp:PhaseC_Construction ;
+                    sh:minCount 1 ;
+                    sh:maxCount 1 ;
+                    sh:message "Each 'occp:PhaseC_Construction_Instant' must belong to exactly one 'occp:PhaseC_Construction' via 'ocp:belongsToPhase'."@en ;
+                    sh:severity sh:Violation ;
+                ] .
+
+        ### INSTANT SHAPES PHASE C - CONSTRUCTION
+        
+            ocsh:ConstructionStartShape a sh:NodeShape ;
+                sh:targetClass occp:ConstructionStart ;
+                # Instant starts a new Phase C (Construction)
+                sh:property [
+                    sh:path ocp:startsPhase ;
+                    sh:class occp:PhaseC_Construction ;
+                    sh:minCount 1 ;
+                    sh:maxCount 1 ;
+                    sh:message "Each 'occp:ConstructionStart' must start exactly one 'occp:PhaseC_Construction' via 'ocp:startsPhase'."@en ;
+                    sh:severity sh:Violation
+                ] ;
+                # Ensure ConstructionStart occurs before ConstructionCompletion in the same phase
+                sh:sparql [
+                    sh:select """
+                        PREFIX occp: <http://www.semanticweb.org/DigitalizeMe/ontologies/2025/3/OCCP#>
+                        PREFIX ocp: <http://www.semanticweb.org/DigitalizeMe/ontologies/2025/3/OCP#>
+                        PREFIX time: <http://www.w3.org/2006/time#>
+                        SELECT $this
+                        WHERE {
+                            $this ocp:startsPhase ?phase .
+                            $this ocp:hasActualTime ?timeCS .
+                            ?completion a occp:ConstructionCompletion .
+                            ?completion ocp:endsPhase ?phase .
+                            ?completion ocp:hasActualTime ?timeCC .
+                            FILTER (?timeCS >= ?timeCC)
+                        }
+                    """ ;
+                    sh:message "For 'occp:ConstructionStart': Actual time (ocp:hasActualTime) must occur before 'occp:ConstructionCompletion' in the same 'occp:PhaseC_Construction'."@en ;
+                    sh:severity sh:Violation
+                ] ;
+                # Ensure ConstructionStart occurs after Submission in the same process
+                sh:sparql [
+                    sh:select """
+                        PREFIX occp: <http://www.semanticweb.org/DigitalizeMe/ontologies/2025/3/OCCP#>
+                        PREFIX ocp: <http://www.semanticweb.org/DigitalizeMe/ontologies/2025/3/OCP#>
+                        PREFIX time: <http://www.w3.org/2006/time#>
+                        SELECT $this
+                        WHERE {
+                            $this ocp:startsPhase ?phase .
+                            ?phase ocp:belongsToProcess ?process .
+                            $this ocp:hasActualTime ?timeCS .
+                            ?submission a occp:Submission .
+                            ?submission ocp:belongsToProcess ?process .
+                            ?submission ocp:hasActualTime ?timeSub .
+                            FILTER (?timeCS <= ?timeSub)
+                        }
+                    """ ;
+                    sh:message "For 'occp:ConstructionStart': Actual time (ocp:hasActualTime) must occur after 'occp:Submission' in the same process."@en ;
+                    sh:severity sh:Violation
+                ] .
+
+            ocsh:ConstructionCompletionShape a sh:NodeShape ;
+                sh:targetClass occp:ConstructionCompletion ;
+                # Instant belongs to a Phase C (Construction)
+                sh:property [
+                    sh:path ocp:belongsToPhase ;
+                    sh:class occp:PhaseC_Construction ;
+                    sh:minCount 1 ;
+                    sh:maxCount 1 ;
+                    sh:message "Each 'occp:ConstructionCompletion' must belong to exactly one 'occp:PhaseC_Construction' via 'ocp:belongsToPhase'."@en ;
+                    sh:severity sh:Violation
+                ] ;
+                # Ensure ConstructionCompletion occurs after ConstructionStart in the same phase
+                sh:sparql [
+                    sh:select """
+                        PREFIX occp: <http://www.semanticweb.org/DigitalizeMe/ontologies/2025/3/OCCP#>
+                        PREFIX ocp: <http://www.semanticweb.org/DigitalizeMe/ontologies/2025/3/OCP#>
+                        PREFIX time: <http://www.w3.org/2006/time#>
+                        SELECT $this
+                        WHERE {
+                            $this ocp:belongsToPhase ?phase .
+                            $this ocp:hasActualTime ?timeCC .
+                            ?start a occp:ConstructionStart .
+                            ?start ocp:startsPhase ?phase .
+                            ?start ocp:hasActualTime ?timeCS .
+                            FILTER (?timeCC <= ?timeCS)
+                        }
+                    """ ;
+                    sh:message "For 'occp:ConstructionCompletion': Actual time (ocp:hasActualTime) must occur after 'occp:ConstructionStart' in the same 'occp:PhaseC_Construction'."@en ;
+                    sh:severity sh:Violation
+                ] ;
+                # Ensure ConstructionCompletion occurs before ConstructionAcceptance in the same process
+                sh:sparql [
+                    sh:select """
+                        PREFIX occp: <http://www.semanticweb.org/DigitalizeMe/ontologies/2025/3/OCCP#>
+                        PREFIX ocp: <http://www.semanticweb.org/DigitalizeMe/ontologies/2025/3/OCP#>
+                        PREFIX time: <http://www.w3.org/2006/time#>
+                        SELECT $this
+                        WHERE {
+                            $this ocp:belongsToPhase ?phase .
+                            ?phase ocp:belongsToProcess ?process .
+                            $this ocp:hasActualTime ?timeCC .
+                            ?acceptance a occp:ConstructionAcceptance .
+                            ?acceptance ocp:belongsToProcess ?process .
+                            ?acceptance ocp:hasActualTime ?timeCA .
+                            FILTER (?timeCC >= ?timeCA)
+                        }
+                    """ ;
+                    sh:message "For 'occp:ConstructionCompletion': Actual time (ocp:hasActualTime) must occur before 'occp:ConstructionAcceptance' in the same process."@en ;
+                    sh:severity sh:Violation
+                ] ;
+                # Ensure ConstructionCompletion occurs before DefectElimStart in the same process
+                sh:sparql [
+                    sh:select """
+                        PREFIX occp: <http://www.semanticweb.org/DigitalizeMe/ontologies/2025/3/OCCP#>
+                        PREFIX ocp: <http://www.semanticweb.org/DigitalizeMe/ontologies/2025/3/OCP#>
+                        PREFIX time: <http://www.w3.org/2006/time#>
+                        SELECT $this
+                        WHERE {
+                            $this ocp:belongsToPhase ?phase .
+                            ?phase ocp:belongsToProcess ?process .
+                            $this ocp:hasActualTime ?timeCC .
+                            ?defectStart a occp:DefectElimStart .
+                            ?defectStart ocp:belongsToProcess ?process .
+                            ?defectStart ocp:hasActualTime ?timeDES .
+                            FILTER (?timeCC >= ?timeDES)
+                        }
+                    """ ;
+                    sh:message "For 'occp:ConstructionCompletion': Actual time (ocp:hasActualTime) must occur before 'occp:DefectElimStart' in the same process."@en ;
+                    sh:severity sh:Violation
+                ] .
+
+            ocsh:DefectElimStartShape a sh:NodeShape ;
+                sh:targetClass occp:DefectElimStart ;
+                # Instant belongs to Phase C (Construction)
+                sh:property [
+                    sh:path ocp:belongsToPhase ;
+                    sh:class occp:PhaseC_Construction ;
+                    sh:minCount 1 ;
+                    sh:maxCount 1 ;
+                    sh:message "Each 'occp:DefectElimStart' must belong to exactly one 'occp:PhaseC_Construction' via 'ocp:belongsToPhase'."@en ;
+                    sh:severity sh:Violation
+                ] ;
+                # Ensure DefectElimStart occurs after ConstructionCompletion in the same process
+                sh:sparql [
+                    sh:select """
+                        PREFIX occp: <http://www.semanticweb.org/DigitalizeMe/ontologies/2025/3/OCCP#>
+                        PREFIX ocp: <http://www.semanticweb.org/DigitalizeMe/ontologies/2025/3/OCP#>
+                        PREFIX time: <http://www.w3.org/2006/time#>
+                        SELECT $this
+                        WHERE {
+                            $this ocp:belongsToPhase ?phase .
+                            ?phase ocp:belongsToProcess ?process .
+                            $this ocp:hasActualTime ?timeDES .
+                            ?completion a occp:ConstructionCompletion .
+                            ?completion ocp:belongsToProcess ?process .
+                            ?completion ocp:hasActualTime ?timeCC .
+                            FILTER (?timeDES <= ?timeCC)
+                        }
+                    """ ;
+                    sh:message "For 'occp:DefectElimStart': Actual time (ocp:hasActualTime) must occur after 'occp:ConstructionCompletion' in the same process."@en ;
+                    sh:severity sh:Violation
+                ] ;
+                # Ensure DefectElimStart occurs before DefectElimCompletion in the same phase process
+                sh:sparql [
+                    sh:select """
+                        PREFIX occp: <http://www.semanticweb.org/DigitalizeMe/ontologies/2025/3/OCCP#>
+                        PREFIX ocp: <http://www.semanticweb.org/DigitalizeMe/ontologies/2025/3/OCP#>
+                        PREFIX time: <http://www.w3.org/2006/time#>
+                        SELECT $this
+                        WHERE {
+                            $this ocp:belongsToPhase ?phase .
+                            $this ocp:hasActualTime ?timeDES .
+                            ?defectComp a occp:DefectElimCompletion .
+                            ?defectComp ocp:belongsToPhase ?phase .
+                            ?defectComp ocp:hasActualTime ?timeDEC .
+                            FILTER (?timeDES >= ?timeDEC)
+                        }
+                    """ ;
+                    sh:message "For 'occp:DefectElimStart': Actual time (ocp:hasActualTime) must occur before 'occp:DefectElimCompletion' in the same 'occp:PhaseC_Construction'."@en ;
+                    sh:severity sh:Violation
+                ] .
+
+            ocsh:DefectElimCompletionShape a sh:NodeShape ;
+                sh:targetClass occp:DefectElimCompletion ;
+                # Instant belongs to Phase C (Construction)
+                sh:property [
+                    sh:path ocp:belongsToPhase ;
+                    sh:class occp:PhaseC_Construction ;
+                    sh:minCount 1 ;
+                    sh:maxCount 1 ;
+                    sh:message "Each 'occp:DefectElimCompletion' must belong to exactly one 'occp:PhaseC_Construction' via 'ocp:belongsToPhase'."@en ;
+                    sh:severity sh:Violation
+                ] ;
+                # Ensure DefectElimCompletion occurs after DefectElimStart in the same phase
+                sh:sparql [
+                    sh:select """
+                        PREFIX occp: <http://www.semanticweb.org/DigitalizeMe/ontologies/2025/3/OCCP#>
+                        PREFIX ocp: <http://www.semanticweb.org/DigitalizeMe/ontologies/2025/3/OCP#>
+                        PREFIX time: <http://www.w3.org/2006/time#>
+                        SELECT $this
+                        WHERE {
+                            $this ocp:belongsToPhase ?phase .
+                            $this ocp:hasActualTime ?timeDEC .
+                            ?defectStart a occp:DefectElimStart .
+                            ?defectStart ocp:belongsToPhase ?phase .
+                            ?defectStart ocp:hasActualTime ?timeDES .
+                            FILTER (?timeDEC <= ?timeDES)
+                        }
+                    """ ;
+                    sh:message "For 'occp:DefectElimCompletion': Actual time (ocp:hasActualTime) must occur after 'occp:DefectElimStart' in the same 'occp:PhaseC_Construction'."@en ;
+                    sh:severity sh:Violation
+                ] ;
+                # Ensure DefectElimCompletion occurs before ConstructionAcceptance in the same phase
+                sh:sparql [
+                    sh:select """
+                        PREFIX occp: <http://www.semanticweb.org/DigitalizeMe/ontologies/2025/3/OCCP#>
+                        PREFIX ocp: <http://www.semanticweb.org/DigitalizeMe/ontologies/2025/3/OCP#>
+                        PREFIX time: <http://www.w3.org/2006/time#>
+                        SELECT $this
+                        WHERE {
+                            $this ocp:belongsToPhase ?phase .
+                            $this ocp:hasActualTime ?timeDEC .
+                            ?acceptance a occp:ConstructionAcceptance .
+                            ?acceptance ocp:endsPhase ?phase .
+                            ?acceptance ocp:hasActualTime ?timeCA .
+                            FILTER (?timeDEC >= ?timeCA)
+                        }
+                    """ ;
+                    sh:message "For 'occp:DefectElimCompletion': Actual time (ocp:hasActualTime) must occur before 'occp:ConstructionAcceptance' in the same 'occp:PhaseC_Construction'."@en ;
+                    sh:severity sh:Violation
+                ] .
+
+            ocsh:ConstructionAcceptanceShape a sh:NodeShape ;
+                sh:targetClass occp:ConstructionAcceptance ;
+                # Instant ends Phase C (Construction)
+                sh:property [
+                    sh:path ocp:endsPhase ;
+                    sh:class occp:PhaseC_Construction ;
+                    sh:minCount 1 ;
+                    sh:maxCount 1 ;
+                    sh:message "Each 'occp:ConstructionAcceptance' must end exactly one 'occp:PhaseC_Construction' via 'ocp:endsPhase'."@en ;
+                    sh:severity sh:Violation
+                ] ;
+                # Ensure ConstructionAcceptance occurs before UsageStart in the same process
+                sh:sparql [
+                    sh:select """
+                        PREFIX occp: <http://www.semanticweb.org/DigitalizeMe/ontologies/2025/3/OCCP#>
+                        PREFIX ocp: <http://www.semanticweb.org/DigitalizeMe/ontologies/2025/3/OCP#>
+                        PREFIX time: <http://www.w3.org/2006/time#>
+                        SELECT $this
+                        WHERE {
+                            $this ocp:endsPhase ?phase .
+                            ?phase ocp:belongsToProcess ?process .
+                            $this ocp:hasActualTime ?timeCA .
+                            ?usageStart a occp:UsageStart .
+                            ?usageStart ocp:belongsToProcess ?process .
+                            ?usageStart ocp:hasActualTime ?timeUS .
+                            FILTER (?timeCA >= ?timeUS)
+                        }
+                    """ ;
+                    sh:message "For 'occp:ConstructionAcceptance': Actual time (ocp:hasActualTime) should occur before 'occp:UsageStart' in the same process."@en ;
+                    sh:severity sh:Warning
+                ] ;
+                # Ensure ConstructionAcceptance occurs before or with CompletionOfConstruction in the same process
+                sh:sparql [
+                    sh:select """
+                        PREFIX occp: <http://www.semanticweb.org/DigitalizeMe/ontologies/2025/3/OCCP#>
+                        PREFIX ocp: <http://www.semanticweb.org/DigitalizeMe/ontologies/2025/3/OCP#>
+                        PREFIX time: <http://www.w3.org/2006/time#>
+                        SELECT $this
+                        WHERE {
+                            $this ocp:endsPhase ?phase .
+                            ?phase ocp:belongsToProcess ?process .
+                            $this ocp:hasActualTime ?timeCA .
+                            ?completion a occp:CompletionOfConstruction .
+                            ?completion ocp:belongsToProcess ?process .
+                            ?completion ocp:hasActualTime ?timeCOC .
+                            FILTER (?timeCA > ?timeCOC)
+                        }
+                    """ ;
+                    sh:message "For 'occp:ConstructionAcceptance': Actual time (ocp:hasActualTime) must occur before 'occp:CompletionOfConstruction' in the same process."@en ;
+                    sh:severity sh:Violation
+                ] ;
+                # Ensure ConstructionAcceptance occurs after ConstructionCompletion in the same process
+                sh:sparql [
+                    sh:select """
+                        PREFIX occp: <http://www.semanticweb.org/DigitalizeMe/ontologies/2025/3/OCCP#>
+                        PREFIX ocp: <http://www.semanticweb.org/DigitalizeMe/ontologies/2025/3/OCP#>
+                        PREFIX time: <http://www.w3.org/2006/time#>
+                        SELECT $this
+                        WHERE {
+                            $this ocp:endsPhase ?phase .
+                            ?phase ocp:belongsToProcess ?process .
+                            $this ocp:hasActualTime ?timeCA .
+                            ?completion a occp:ConstructionCompletion .
+                            ?completion ocp:belongsToProcess ?process .
+                            ?completion ocp:hasActualTime ?timeCC .
+                            FILTER (?timeCA <= ?timeCC)
+                        }
+                    """ ;
+                    sh:message "For 'occp:ConstructionAcceptance': Actual time (ocp:hasActualTime) must occur after 'occp:ConstructionCompletion' in the same process."@en ;
+                    sh:severity sh:Violation
+                ] ;
+                # Ensure ConstructionAcceptance occurs after DefectElimCompletion in the same phase (if exists)
+                sh:sparql [
+                    sh:select """
+                        PREFIX occp: <http://www.semanticweb.org/DigitalizeMe/ontologies/2025/3/OCCP#>
+                        PREFIX ocp: <http://www.semanticweb.org/DigitalizeMe/ontologies/2025/3/OCP#>
+                        PREFIX time: <http://www.w3.org/2006/time#>
+                        SELECT $this
+                        WHERE {
+                            $this ocp:endsPhase ?phase .
+                            $this ocp:hasActualTime ?timeCA .
+                            ?defectComp a occp:DefectElimCompletion .
+                            ?defectComp ocp:belongsToPhase ?phase .
+                            ?defectComp ocp:hasActualTime ?timeDEC .
+                            FILTER (?timeCA <= ?timeDEC)
+                        }
+                    """ ;
+                    sh:message "For 'occp:ConstructionAcceptance': Actual time (ocp:hasActualTime) must occur after 'occp:DefectElimCompletion' in the same 'occp:PhaseC_Construction'."@en ;
+                    sh:severity sh:Violation
+                ] .
+
+
+    ### PHASE D INSTANTS
+        # PHASE ASSIGNMENT
+            ocsh:PhaseDInstantShape a sh:NodeShape ;
+                sh:targetClass occp:PhaseD_Usage_Instant ;
+                sh:property [
+                    sh:path ocp:belongsToPhase ;
+                    sh:class occp:PhaseD_Usage ;
+                    sh:minCount 1 ;
+                    sh:maxCount 1 ;
+                    sh:message "Each 'occp:PhaseD_Usage_Instant' must belong to exactly one 'occp:PhaseD_Usage' via 'ocp:belongsToPhase'."@en ;
+                    sh:severity sh:Violation ;
+                ] .
+
+        ### INSTANT SHAPES PHASE D - USAGE
+
+            ocsh:UsageStartShape a sh:NodeShape ;
+                sh:targetClass occp:UsageStart ;
+                # Instant starts a new Phase D (Usage)
+                sh:property [
+                    sh:path ocp:startsPhase ;
+                    sh:class occp:PhaseD_Usage ;
+                    sh:minCount 1 ;
+                    sh:maxCount 1 ;
+                    sh:message "Each 'occp:UsageStart' must start exactly one 'occp:PhaseD_Usage' via 'ocp:startsPhase'."@en ;
+                    sh:severity sh:Violation
+                ] ;
+                # Ensure UsageStart occurs after ConstructionAcceptance in the same process
+                sh:sparql [
+                    sh:select """
+                        PREFIX occp: <http://www.semanticweb.org/DigitalizeMe/ontologies/2025/3/OCCP#>
+                        PREFIX ocp: <http://www.semanticweb.org/DigitalizeMe/ontologies/2025/3/OCP#>
+                        PREFIX time: <http://www.w3.org/2006/time#>
+                        SELECT $this
+                        WHERE {
+                            $this ocp:startsPhase ?phase .
+                            ?phase ocp:belongsToProcess ?process .
+                            $this ocp:hasActualTime ?timeUS .
+                            ?constrAccept a occp:ConstructionAcceptance .
+                            ?constrAccept ocp:belongsToProcess ?process .
+                            ?constrAccept ocp:hasActualTime ?timeCA .
+                            FILTER (?timeUS <= ?timeCA)
+                        }
+                    """ ;
+                    sh:message "For 'occp:UsageStart': Actual time (ocp:hasActualTime) must occur after 'occp:ConstructionAcceptance' in the same process."@en ;
+                    sh:severity sh:Violation
+                ] ;
+                # Ensure UsageStart occurs before UsageEnd in the same phase
+                sh:sparql [
+                    sh:select """
+                        PREFIX occp: <http://www.semanticweb.org/DigitalizeMe/ontologies/2025/3/OCCP#>
+                        PREFIX ocp: <http://www.semanticweb.org/DigitalizeMe/ontologies/2025/3/OCP#>
+                        PREFIX time: <http://www.w3.org/2006/time#>
+                        SELECT $this
+                        WHERE {
+                            $this ocp:startsPhase ?phase .
+                            $this ocp:hasActualTime ?timeUS .
+                            ?usageEnd a occp:UsageEnd .
+                            ?usageEnd ocp:endsPhase ?phase .
+                            ?usageEnd ocp:hasActualTime ?timeUE .
+                            FILTER (?timeUS >= ?timeUE)
+                        }
+                    """ ;
+                    sh:message "For 'occp:UsageStart': Actual time (ocp:hasActualTime) must occur before 'occp:UsageEnd' in the same 'occp:PhaseD_Usage'."@en ;
+                    sh:severity sh:Violation
+                ] .
+
+            ocsh:UsageChangeShape a sh:NodeShape ;
+                sh:targetClass occp:UsageChange ;
+                # Instant ends a Usage Phase
+                sh:property [
+                    sh:path ocp:endsPhase ;
+                    sh:class occp:PhaseD_Usage ;
+                    sh:minCount 1 ;
+                    sh:message "Each 'occp:UsageChange' must end at least one 'occp:PhaseD_Usage' via 'ocp:endsPhase'."@en ;
+                    sh:severity sh:Violation
+                ] ;
+                # Instant starts a new Usage Phase
+                sh:property [
+                    sh:path ocp:startsPhase ;
+                    sh:class occp:PhaseD_Usage ;
+                    sh:minCount 1 ;
+                    sh:message "Each 'occp:UsageChange' must start at least one 'occp:PhaseD_Usage' via 'ocp:startsPhase'."@en ;
+                    sh:severity sh:Violation
+                ] ;
+                # Ensure UsageChange occurs after CompletionOfConstruction in the same process
+                sh:sparql [
+                    sh:select """
+                        PREFIX occp: <http://www.semanticweb.org/DigitalizeMe/ontologies/2025/3/OCCP#>
+                        PREFIX ocp: <http://www.semanticweb.org/DigitalizeMe/ontologies/2025/3/OCP#>
+                        PREFIX time: <http://www.w3.org/2006/time#>
+                        SELECT $this
+                        WHERE {
+                            $this ocp:endsPhase ?oldPhase .
+                            ?oldPhase ocp:belongsToProcess ?process .
+                            $this ocp:hasActualTime ?timeUC .
+                            ?compConstr a occp:CompletionOfConstruction .
+                            ?compConstr ocp:belongsToProcess ?process .
+                            ?compConstr ocp:hasActualTime ?timeCOC .
+                            FILTER (?timeUC <= ?timeCOC)
+                        }
+                    """ ;
+                    sh:message "For 'occp:UsageChange': Actual time (ocp:hasActualTime) must occur after 'occp:CompletionOfConstruction' in the same process."@en ;
+                    sh:severity sh:Violation
+                ] ;
+                # Ensure UsageChange occurs after UsageStart in the same phase (for the phase it ends)
+                sh:sparql [
+                    sh:select """
+                        PREFIX occp: <http://www.semanticweb.org/DigitalizeMe/ontologies/2025/3/OCCP#>
+                        PREFIX ocp: <http://www.semanticweb.org/DigitalizeMe/ontologies/2025/3/OCP#>
+                        PREFIX time: <http://www.w3.org/2006/time#>
+                        SELECT $this
+                        WHERE {
+                            $this ocp:endsPhase ?phase .
+                            $this ocp:hasActualTime ?timeUC .
+                            ?usageStart a occp:UsageStart .
+                            ?usageStart ocp:startsPhase ?phase .
+                            ?usageStart ocp:hasActualTime ?timeUS .
+                            FILTER (?timeUC <= ?timeUS)
+                        }
+                    """ ;
+                    sh:message "For 'occp:UsageChange': Actual time (ocp:hasActualTime) must occur after 'occp:UsageStart' in the same 'occp:PhaseD_Usage' it ends."@en ;
+                    sh:severity sh:Violation
+                ] ;
+                # Ensure UsageChange occurs before UsageEnd in the same phase (for the phase it starts)
+                sh:sparql [
+                    sh:select """
+                        PREFIX occp: <http://www.semanticweb.org/DigitalizeMe/ontologies/2025/3/OCCP#>
+                        PREFIX ocp: <http://www.semanticweb.org/DigitalizeMe/ontologies/2025/3/OCP#>
+                        PREFIX time: <http://www.w3.org/2006/time#>
+                        SELECT $this
+                        WHERE {
+                            $this ocp:startsPhase ?phase .
+                            $this ocp:hasActualTime ?timeUC .
+                            ?usageEnd a occp:UsageEnd .
+                            ?usageEnd ocp:endsPhase ?phase .
+                            ?usageEnd ocp:hasActualTime ?timeUE .
+                            FILTER (?timeUC >= ?timeUE)
+                        }
+                    """ ;
+                    sh:message "For 'occp:UsageChange': Actual time (ocp:hasActualTime) must occur before 'occp:UsageEnd' in the same 'occp:PhaseD_Usage' it starts."@en ;
+                    sh:severity sh:Violation
+                ] .
+
+            ocsh:UsageEndShape a sh:NodeShape ;
+                sh:targetClass occp:UsageEnd ;
+                # Instant ends a Usage Phase
+                sh:property [
+                    sh:path ocp:endsPhase ;
+                    sh:class occp:PhaseD_Usage ;
+                    sh:minCount 1 ;
+                    sh:maxCount 1 ;
+                    sh:message "Each 'occp:UsageEnd' must end exactly one 'occp:PhaseD_Usage' via 'ocp:endsPhase'."@en ;
+                    sh:severity sh:Violation
+                ] ;
+                # Ensure UsageEnd occurs after UsageStart in the same phase
+                sh:sparql [
+                    sh:select """
+                        PREFIX occp: <http://www.semanticweb.org/DigitalizeMe/ontologies/2025/3/OCCP#>
+                        PREFIX ocp: <http://www.semanticweb.org/DigitalizeMe/ontologies/2025/3/OCP#>
+                        PREFIX time: <http://www.w3.org/2006/time#>
+                        SELECT $this
+                        WHERE {
+                            $this ocp:endsPhase ?phase .
+                            $this ocp:hasActualTime ?timeUE .
+                            ?usageStart a occp:UsageStart .
+                            ?usageStart ocp:startsPhase ?phase .
+                            ?usageStart ocp:hasActualTime ?timeUS .
+                            FILTER (?timeUE <= ?timeUS)
+                        }
+                    """ ;
+                    sh:message "For 'occp:UsageEnd': Actual time (ocp:hasActualTime) must occur after 'occp:UsageStart' in the same 'occp:PhaseD_Usage'."@en ;
+                    sh:severity sh:Violation
+                ] ;
+                # Ensure UsageEnd occurs after UsageChange in the same phase (if UsageChange exists)
+                sh:sparql [
+                    sh:select """
+                        PREFIX occp: <http://www.semanticweb.org/DigitalizeMe/ontologies/2025/3/OCCP#>
+                        PREFIX ocp: <http://www.semanticweb.org/DigitalizeMe/ontologies/2025/3/OCP#>
+                        PREFIX time: <http://www.w3.org/2006/time#>
+                        SELECT $this
+                        WHERE {
+                            $this ocp:endsPhase ?phase .
+                            $this ocp:hasActualTime ?timeUE .
+                            ?usageChange a occp:UsageChange .
+                            ?usageChange ocp:startsPhase ?phase .
+                            ?usageChange ocp:hasActualTime ?timeUC .
+                            FILTER (?timeUE <= ?timeUC)
+                        }
+                    """ ;
+                    sh:message "For 'occp:UsageEnd': Actual time (ocp:hasActualTime) must occur after 'occp:UsageChange' in the same 'occp:PhaseD_Usage'."@en ;
+                    sh:severity sh:Violation
+                ] .
+
+    
+    ### PHASE E INSTANTS
+        # PHASE ASSIGNMENT
+            ocsh:PhaseEInstantShape a sh:NodeShape ;
+                sh:targetClass occp:PhaseE_Warranty_Instant ;
+                sh:property [
+                    sh:path ocp:belongsToPhase ;
+                    sh:class occp:PhaseE_Warranty ;
+                    sh:minCount 1 ;
+                    sh:maxCount 1 ;
+                    sh:message "Each 'occp:PhaseE_Warranty_Instant' must belong to exactly one 'occp:PhaseE_Warranty' via 'ocp:belongsToPhase'."@en ;
+                    sh:severity sh:Violation ;
+                ] .
+
+        ### INSTANT SHAPES PHASE E - WARRANTY
+
+            ocsh:WarrantyStartShape a sh:NodeShape ;
+                sh:targetClass occp:WarrantyStart ;
+                # Instant starts a new Phase E (Warranty)
+                sh:property [
+                    sh:path ocp:startsPhase ;
+                    sh:class occp:PhaseE_Warranty ;
+                    sh:minCount 1 ;
+                    sh:maxCount 1 ;
+                    sh:message "Each 'occp:WarrantyStart' must start exactly one 'occp:PhaseE_Warranty' via 'ocp:startsPhase'."@en ;
+                    sh:severity sh:Violation
+                ] ;
+                # Ensure WarrantyStart occurs after ConstructionAcceptance in the same process
+                sh:sparql [
+                    sh:select """
+                        PREFIX occp: <http://www.semanticweb.org/DigitalizeMe/ontologies/2025/3/OCCP#>
+                        PREFIX ocp: <http://www.semanticweb.org/DigitalizeMe/ontologies/2025/3/OCP#>
+                        PREFIX time: <http://www.w3.org/2006/time#>
+                        SELECT $this
+                        WHERE {
+                            $this ocp:startsPhase ?phase .
+                            ?phase ocp:belongsToProcess ?process .
+                            $this ocp:hasActualTime ?timeWS .
+                            ?acceptance a occp:ConstructionAcceptance .
+                            ?acceptance ocp:belongsToProcess ?process .
+                            ?acceptance ocp:hasActualTime ?timeCA .
+                            FILTER (?timeWS <= ?timeCA)
+                        }
+                    """ ;
+                    sh:message "For 'occp:WarrantyStart': Actual time (ocp:hasActualTime) must occur after 'occp:ConstructionAcceptance' in the same process."@en ;
+                    sh:severity sh:Violation
+                ] ;
+                # Ensure WarrantyStart occurs before WarrantyEnd in the same phase
+                sh:sparql [
+                    sh:select """
+                        PREFIX occp: <http://www.semanticweb.org/DigitalizeMe/ontologies/2025/3/OCCP#>
+                        PREFIX ocp: <http://www.semanticweb.org/DigitalizeMe/ontologies/2025/3/OCP#>
+                        PREFIX time: <http://www.w3.org/2006/time#>
+                        SELECT $this
+                        WHERE {
+                            $this ocp:startsPhase ?phase .
+                            $this ocp:hasActualTime ?timeWS .
+                            ?end a occp:WarrantyEnd .
+                            ?end ocp:endsPhase ?phase .
+                            ?end ocp:hasActualTime ?timeWE .
+                            FILTER (?timeWS >= ?timeWE)
+                        }
+                    """ ;
+                    sh:message "For 'occp:WarrantyStart': Actual time (ocp:hasActualTime) must occur before 'occp:WarrantyEnd' in the same 'occp:PhaseE_Warranty'."@en ;
+                    sh:severity sh:Violation
+                ] .
+
+            ocsh:WarrantyChangeShape a sh:NodeShape ;
+                sh:targetClass occp:WarrantyChange ;
+                # Instant ends a Warranty Phase
+                sh:property [
+                    sh:path ocp:endsPhase ;
+                    sh:class occp:PhaseE_Warranty ;
+                    sh:minCount 1 ;
+                    sh:maxCount 1 ;
+                    sh:message "Each 'occp:WarrantyChange' must end exactly one 'occp:PhaseE_Warranty' via 'ocp:endsPhase'."@en ;
+                    sh:severity sh:Violation
+                ] ;
+                # Instant starts a new Warranty Phase
+                sh:property [
+                    sh:path ocp:startsPhase ;
+                    sh:class occp:PhaseE_Warranty ;
+                    sh:minCount 1 ;
+                    sh:maxCount 1 ;
+                    sh:message "Each 'occp:WarrantyChange' must start exactly one 'occp:PhaseE_Warranty' via 'ocp:startsPhase'."@en ;
+                    sh:severity sh:Violation
+                ] ;
+                # Ensure WarrantyChange occurs after CompletionOfConstruction in the same process
+                sh:sparql [
+                    sh:select """
+                        PREFIX occp: <http://www.semanticweb.org/DigitalizeMe/ontologies/2025/3/OCCP#>
+                        PREFIX ocp: <http://www.semanticweb.org/DigitalizeMe/ontologies/2025/3/OCP#>
+                        PREFIX time: <http://www.w3.org/2006/time#>
+                        SELECT $this
+                        WHERE {
+                            $this ocp:endsPhase ?oldPhase .
+                            ?oldPhase ocp:belongsToProcess ?process .
+                            $this ocp:hasActualTime ?timeWC .
+                            ?completion a occp:CompletionOfConstruction .
+                            ?completion ocp:belongsToProcess ?process .
+                            ?completion ocp:hasActualTime ?timeCOC .
+                            FILTER (?timeWC <= ?timeCOC)
+                        }
+                    """ ;
+                    sh:message "For 'occp:WarrantyChange': Actual time (ocp:hasActualTime) must occur after 'occp:CompletionOfConstruction' in the same process."@en ;
+                    sh:severity sh:Violation
+                ] ;
+                # Ensure WarrantyChange occurs after WarrantyStart in the same phase (ended phase)
+                sh:sparql [
+                    sh:select """
+                        PREFIX occp: <http://www.semanticweb.org/DigitalizeMe/ontologies/2025/3/OCCP#>
+                        PREFIX ocp: <http://www.semanticweb.org/DigitalizeMe/ontologies/2025/3/OCP#>
+                        PREFIX time: <http://www.w3.org/2006/time#>
+                        SELECT $this
+                        WHERE {
+                            $this ocp:endsPhase ?phase .
+                            $this ocp:hasActualTime ?timeWC .
+                            ?start a occp:WarrantyStart .
+                            ?start ocp:startsPhase ?phase .
+                            ?start ocp:hasActualTime ?timeWS .
+                            FILTER (?timeWC <= ?timeWS)
+                        }
+                    """ ;
+                    sh:message "For 'occp:WarrantyChange': Actual time (ocp:hasActualTime) must occur after 'occp:WarrantyStart' in the same 'occp:PhaseE_Warranty' it ends."@en ;
+                    sh:severity sh:Violation
+                ] ;
+                # Ensure WarrantyChange occurs before WarrantyEnd in the same phase (started phase)
+                sh:sparql [
+                    sh:select """
+                        PREFIX occp: <http://www.semanticweb.org/DigitalizeMe/ontologies/2025/3/OCCP#>
+                        PREFIX ocp: <http://www.semanticweb.org/DigitalizeMe/ontologies/2025/3/OCP#>
+                        PREFIX time: <http://www.w3.org/2006/time#>
+                        SELECT $this
+                        WHERE {
+                            $this ocp:startsPhase ?phase .
+                            $this ocp:hasActualTime ?timeWC .
+                            ?end a occp:WarrantyEnd .
+                            ?end ocp:endsPhase ?phase .
+                            ?end ocp:hasActualTime ?timeWE .
+                            FILTER (?timeWC >= ?timeWE)
+                        }
+                    """ ;
+                    sh:message "For 'occp:WarrantyChange': Actual time (ocp:hasActualTime) must occur before 'occp:WarrantyEnd' in the same 'occp:PhaseE_Warranty' it starts."@en ;
+                    sh:severity sh:Violation
+                ] ;
+                # Ensure WarrantyChange occurs before DeconstructionStart in the same process
+                sh:sparql [
+                    sh:select """
+                        PREFIX occp: <http://www.semanticweb.org/DigitalizeMe/ontologies/2025/3/OCCP#>
+                        PREFIX ocp: <http://www.semanticweb.org/DigitalizeMe/ontologies/2025/3/OCP#>
+                        PREFIX time: <http://www.w3.org/2006/time#>
+                        SELECT $this
+                        WHERE {
+                            $this ocp:endsPhase ?oldPhase .
+                            ?oldPhase ocp:belongsToProcess ?process .
+                            $this ocp:hasActualTime ?timeWC .
+                            ?deconStart a occp:DeconstructionStart .
+                            ?deconStart ocp:belongsToProcess ?process .
+                            ?deconStart ocp:hasActualTime ?timeDS .
+                            FILTER (?timeWC >= ?timeDS)
+                        }
+                    """ ;
+                    sh:message "For 'occp:WarrantyChange': Actual time (ocp:hasActualTime) must occur before 'occp:DeconstructionStart' in the same process."@en ;
+                    sh:severity sh:Violation
+                ] .
+
+            ocsh:WarrantyEndShape a sh:NodeShape ;
+                sh:targetClass occp:WarrantyEnd ;
+                # Instant ends a Warranty Phase
+                sh:property [
+                    sh:path ocp:endsPhase ;
+                    sh:class occp:PhaseE_Warranty ;
+                    sh:minCount 1 ;
+                    sh:maxCount 1 ;
+                    sh:message "Each 'occp:WarrantyEnd' must end exactly one 'occp:PhaseE_Warranty' via 'ocp:endsPhase'."@en ;
+                    sh:severity sh:Violation
+                ] ;
+                # Ensure WarrantyEnd occurs after WarrantyStart in the same phase
+                sh:sparql [
+                    sh:select """
+                        PREFIX occp: <http://www.semanticweb.org/DigitalizeMe/ontologies/2025/3/OCCP#>
+                        PREFIX ocp: <http://www.semanticweb.org/DigitalizeMe/ontologies/2025/3/OCP#>
+                        PREFIX time: <http://www.w3.org/2006/time#>
+                        SELECT $this
+                        WHERE {
+                            $this ocp:endsPhase ?phase .
+                            $this ocp:hasActualTime ?timeWE .
+                            ?start a occp:WarrantyStart .
+                            ?start ocp:startsPhase ?phase .
+                            ?start ocp:hasActualTime ?timeWS .
+                            FILTER (?timeWE <= ?timeWS)
+                        }
+                    """ ;
+                    sh:message "For 'occp:WarrantyEnd': Actual time (ocp:hasActualTime) must occur after 'occp:WarrantyStart' in the same 'occp:PhaseE_Warranty'."@en ;
+                    sh:severity sh:Violation
+                ] ;
+                # Ensure WarrantyEnd occurs after WarrantyChange in the same phase (if WarrantyChange exists)
+                sh:sparql [
+                    sh:select """
+                        PREFIX occp: <http://www.semanticweb.org/DigitalizeMe/ontologies/2025/3/OCCP#>
+                        PREFIX ocp: <http://www.semanticweb.org/DigitalizeMe/ontologies/2025/3/OCP#>
+                        PREFIX time: <http://www.w3.org/2006/time#>
+                        SELECT $this
+                        WHERE {
+                            $this ocp:endsPhase ?phase .
+                            $this ocp:hasActualTime ?timeWE .
+                            ?change a occp:WarrantyChange .
+                            ?change ocp:startsPhase ?phase .
+                            ?change ocp:hasActualTime ?timeWC .
+                            FILTER (?timeWE <= ?timeWC)
+                        }
+                    """ ;
+                    sh:message "For 'occp:WarrantyEnd': Actual time (ocp:hasActualTime) must occur after 'occp:WarrantyChange' in the same 'occp:PhaseE_Warranty'."@en ;
+                    sh:severity sh:Violation
+                ] ;
+                # Ensure WarrantyEnd occurs before DeconstructionStart in the same process
+                sh:sparql [
+                    sh:select """
+                        PREFIX occp: <http://www.semanticweb.org/DigitalizeMe/ontologies/2025/3/OCCP#>
+                        PREFIX ocp: <http://www.semanticweb.org/DigitalizeMe/ontologies/2025/3/OCP#>
+                        PREFIX time: <http://www.w3.org/2006/time#>
+                        SELECT $this
+                        WHERE {
+                            $this ocp:endsPhase ?phase .
+                            ?phase ocp:belongsToProcess ?process .
+                            $this ocp:hasActualTime ?timeWE .
+                            ?deconStart a occp:DeconstructionStart .
+                            ?deconStart ocp:belongsToProcess ?process .
+                            ?deconStart ocp:hasActualTime ?timeDS .
+                            FILTER (?timeWE >= ?timeDS)
+                        }
+                    """ ;
+                    sh:message "For 'occp:WarrantyEnd': Actual time (ocp:hasActualTime) must occur before 'occp:DeconstructionStart' in the same process."@en ;
+                    sh:severity sh:Violation
+                ] .
+
+    ### PHASE F INSTANTS
+        # PHASE ASSIGNMENT
+            ocsh:PhaseFInstantShape a sh:NodeShape ;
+                sh:targetClass occp:PhaseF_DesignLife_Instant ;
+                sh:property [
+                    sh:path ocp:belongsToPhase ;
+                    sh:class occp:PhaseF_DesignLife ;
+                    sh:minCount 1 ;
+                    sh:maxCount 1 ;
+                    sh:message "Each 'occp:PhaseF_DesignLife_Instant' must belong to exactly one 'occp:PhaseF_DesignLife' via 'ocp:belongsToPhase'."@en ;
+                    sh:severity sh:Violation ;
+                ] .
+
+        ### INSTANT SHAPES PHASE F - DESIGN LIFE
+
+            ocsh:DesignLifeStartShape a sh:NodeShape ;
+                sh:targetClass occp:DesignLifeStart ;
+                # Instant starts a new Phase F (Design Life)
+                sh:property [
+                    sh:path ocp:startsPhase ;
+                    sh:class occp:PhaseF_DesignLife ;
+                    sh:minCount 1 ;
+                    sh:maxCount 1 ;
+                    sh:message "Each 'occp:DesignLifeStart' must start exactly one 'occp:PhaseF_DesignLife' via 'ocp:startsPhase'."@en ;
+                    sh:severity sh:Violation
+                ] ;
+                # Ensure DesignLifeStart occurs after ConstructionAcceptance in the same process
+                sh:sparql [
+                    sh:select """
+                        PREFIX occp: <http://www.semanticweb.org/DigitalizeMe/ontologies/2025/3/OCCP#>
+                        PREFIX ocp: <http://www.semanticweb.org/DigitalizeMe/ontologies/2025/3/OCP#>
+                        PREFIX time: <http://www.w3.org/2006/time#>
+                        SELECT $this
+                        WHERE {
+                            $this ocp:startsPhase ?phase .
+                            ?phase ocp:belongsToProcess ?process .
+                            $this ocp:hasActualTime ?timeDLS .
+                            ?constAccept a occp:ConstructionAcceptance .
+                            ?constAccept ocp:belongsToProcess ?process .
+                            ?constAccept ocp:hasActualTime ?timeCA .
+                            FILTER (?timeDLS <= ?timeCA)
+                        }
+                    """ ;
+                    sh:message "For 'occp:DesignLifeStart': Actual time (ocp:hasActualTime) must occur after 'occp:ConstructionAcceptance' in the same process."@en ;
+                    sh:severity sh:Violation
+                ] ;
+                # Ensure DesignLifeStart occurs before DesignLifeChange in the same phase (if DesignLifeChange exists)
+                sh:sparql [
+                    sh:select """
+                        PREFIX occp: <http://www.semanticweb.org/DigitalizeMe/ontologies/2025/3/OCCP#>
+                        PREFIX ocp: <http://www.semanticweb.org/DigitalizeMe/ontologies/2025/3/OCP#>
+                        PREFIX time: <http://www.w3.org/2006/time#>
+                        SELECT $this
+                        WHERE {
+                            $this ocp:startsPhase ?phase .
+                            $this ocp:hasActualTime ?timeDLS .
+                            ?designChange a occp:DesignLifeChange .
+                            ?designChange ocp:endsPhase ?phase .
+                            ?designChange ocp:hasActualTime ?timeDLC .
+                            FILTER (?timeDLS >= ?timeDLC)
+                        }
+                    """ ;
+                    sh:message "For 'occp:DesignLifeStart': Actual time (ocp:hasActualTime) must occur before 'occp:DesignLifeChange' in the same 'occp:PhaseF_DesignLife'."@en ;
+                    sh:severity sh:Violation
+                ] ;
+                # Ensure DesignLifeStart occurs before DesignLifeEnd in the same phase (if DesignLifeEnd exists)
+                sh:sparql [
+                    sh:select """
+                        PREFIX occp: <http://www.semanticweb.org/DigitalizeMe/ontologies/2025/3/OCCP#>
+                        PREFIX ocp: <http://www.semanticweb.org/DigitalizeMe/ontologies/2025/3/OCP#>
+                        PREFIX time: <http://www.w3.org/2006/time#>
+                        SELECT $this
+                        WHERE {
+                            $this ocp:startsPhase ?phase .
+                            $this ocp:hasActualTime ?timeDLS .
+                            ?designEnd a occp:DesignLifeEnd .
+                            ?designEnd ocp:endsPhase ?phase .
+                            ?designEnd ocp:hasActualTime ?timeDLE .
+                            FILTER (?timeDLS >= ?timeDLE)
+                        }
+                    """ ;
+                    sh:message "For 'occp:DesignLifeStart': Actual time (ocp:hasActualTime) must occur before 'occp:DesignLifeEnd' in the same 'occp:PhaseF_DesignLife'."@en ;
+                    sh:severity sh:Violation
+                ] .  
+
+            ocsh:DesignLifeChangeShape a sh:NodeShape ;
+                sh:targetClass occp:DesignLifeChange ;
+                # Ends a current Design Life Phase
+                sh:property [
+                    sh:path ocp:endsPhase ;
+                    sh:class occp:PhaseF_DesignLife ;
+                    sh:minCount 1 ;
+                    sh:maxCount 1 ;
+                    sh:message "Each 'occp:DesignLifeChange' must end exactly one 'occp:PhaseF_DesignLife' via 'ocp:endsPhase'."@en ;
+                    sh:severity sh:Violation
+                ] ;
+                # Starts a new Design Life Phase
+                sh:property [
+                    sh:path ocp:startsPhase ;
+                    sh:class occp:PhaseF_DesignLife ;
+                    sh:minCount 1 ;
+                    sh:maxCount 1 ;
+                    sh:message "Each 'occp:DesignLifeChange' must start exactly one 'occp:PhaseF_DesignLife' via 'ocp:startsPhase'."@en ;
+                    sh:severity sh:Violation
+                ] ;
+                # Ensure DesignLifeChange occurs after ConstructionAcceptance in the same process
+                sh:sparql [
+                    sh:select """
+                        PREFIX occp: <http://www.semanticweb.org/DigitalizeMe/ontologies/2025/3/OCCP#>
+                        PREFIX ocp: <http://www.semanticweb.org/DigitalizeMe/ontologies/2025/3/OCP#>
+                        PREFIX time: <http://www.w3.org/2006/time#>
+                        SELECT $this
+                        WHERE {
+                            $this ocp:endsPhase ?phase .
+                            ?phase ocp:belongsToProcess ?process .
+                            $this ocp:hasActualTime ?timeDLC .
+                            ?constAccept a occp:ConstructionAcceptance .
+                            ?constAccept ocp:belongsToProcess ?process .
+                            ?constAccept ocp:hasActualTime ?timeCA .
+                            FILTER (?timeDLC <= ?timeCA)
+                        }
+                    """ ;
+                    sh:message "For 'occp:DesignLifeChange': Actual time (ocp:hasActualTime) must occur after 'occp:ConstructionAcceptance' in the same process."@en ;
+                    sh:severity sh:Violation
+                ] ;
+                # Ensure DesignLifeChange occurs after DesignLifeStart in the ended phase
+                sh:sparql [
+                    sh:select """
+                        PREFIX occp: <http://www.semanticweb.org/DigitalizeMe/ontologies/2025/3/OCCP#>
+                        PREFIX ocp: <http://www.semanticweb.org/DigitalizeMe/ontologies/2025/3/OCP#>
+                        PREFIX time: <http://www.w3.org/2006/time#>
+                        SELECT $this
+                        WHERE {
+                            $this ocp:endsPhase ?phase .
+                            $this ocp:hasActualTime ?timeDLC .
+                            ?designStart a occp:DesignLifeStart .
+                            ?designStart ocp:startsPhase ?phase .
+                            ?designStart ocp:hasActualTime ?timeDLS .
+                            FILTER (?timeDLC <= ?timeDLS)
+                        }
+                    """ ;
+                    sh:message "For 'occp:DesignLifeChange': Actual time (ocp:hasActualTime) must occur after 'occp:DesignLifeStart' in the same 'occp:PhaseF_DesignLife' it ends."@en ;
+                    sh:severity sh:Violation
+                ] ;
+                # Ensure DesignLifeChange occurs before DesignLifeEnd in the started phase (if DesignLifeEnd exists)
+                sh:sparql [
+                    sh:select """
+                        PREFIX occp: <http://www.semanticweb.org/DigitalizeMe/ontologies/2025/3/OCCP#>
+                        PREFIX ocp: <http://www.semanticweb.org/DigitalizeMe/ontologies/2025/3/OCP#>
+                        PREFIX time: <http://www.w3.org/2006/time#>
+                        SELECT $this
+                        WHERE {
+                            $this ocp:startsPhase ?phase .
+                            $this ocp:hasActualTime ?timeDLC .
+                            ?designEnd a occp:DesignLifeEnd .
+                            ?designEnd ocp:endsPhase ?phase .
+                            ?designEnd ocp:hasActualTime ?timeDLE .
+                            FILTER (?timeDLC >= ?timeDLE)
+                        }
+                    """ ;
+                    sh:message "For 'occp:DesignLifeChange': Actual time (ocp:hasActualTime) must occur before 'occp:DesignLifeEnd' in the same 'occp:PhaseF_DesignLife' it starts."@en ;
+                    sh:severity sh:Violation
+                ] .
+
+            ocsh:DesignLifeEndShape a sh:NodeShape ;
+                sh:targetClass occp:DesignLifeEnd ;
+                # Ends a current Design Life Phase
+                sh:property [
+                    sh:path ocp:endsPhase ;
+                    sh:class occp:PhaseF_DesignLife ;
+                    sh:minCount 1 ;
+                    sh:maxCount 1 ;
+                    sh:message "Each 'occp:DesignLifeEnd' must end exactly one 'occp:PhaseF_DesignLife' via 'ocp:endsPhase'."@en ;
+                    sh:severity sh:Violation
+                ] ;
+                # Ensure DesignLifeEnd occurs after DesignLifeStart in the same phase
+                sh:sparql [
+                    sh:select """
+                        PREFIX occp: <http://www.semanticweb.org/DigitalizeMe/ontologies/2025/3/OCCP#>
+                        PREFIX ocp: <http://www.semanticweb.org/DigitalizeMe/ontologies/2025/3/OCP#>
+                        PREFIX time: <http://www.w3.org/2006/time#>
+                        SELECT $this
+                        WHERE {
+                            $this ocp:endsPhase ?phase .
+                            $this ocp:hasActualTime ?timeDLE .
+                            ?designStart a occp:DesignLifeStart .
+                            ?designStart ocp:startsPhase ?phase .
+                            ?designStart ocp:hasActualTime ?timeDLS .
+                            FILTER (?timeDLE <= ?timeDLS)
+                        }
+                    """ ;
+                    sh:message "For 'occp:DesignLifeEnd': Actual time (ocp:hasActualTime) must occur after 'occp:DesignLifeStart' in the same 'occp:PhaseF_DesignLife'."@en ;
+                    sh:severity sh:Violation
+                ] ;
+                # Ensure DesignLifeEnd occurs after DesignLifeChange in the same phase (if DesignLifeChange exists)
+                sh:sparql [
+                    sh:select """
+                        PREFIX occp: <http://www.semanticweb.org/DigitalizeMe/ontologies/2025/3/OCCP#>
+                        PREFIX ocp: <http://www.semanticweb.org/DigitalizeMe/ontologies/2025/3/OCP#>
+                        PREFIX time: <http://www.w3.org/2006/time#>
+                        SELECT $this
+                        WHERE {
+                            $this ocp:endsPhase ?phase .
+                            $this ocp:hasActualTime ?timeDLE .
+                            ?designChange a occp:DesignLifeChange .
+                            ?designChange ocp:startsPhase ?phase .
+                            ?designChange ocp:hasActualTime ?timeDLC .
+                            FILTER (?timeDLE <= ?timeDLC)
+                        }
+                    """ ;
+                    sh:message "For 'occp:DesignLifeEnd': Actual time (ocp:hasActualTime) must occur after 'occp:DesignLifeChange' in the same 'occp:PhaseF_DesignLife'."@en ;
+                    sh:severity sh:Violation
+                ] ;
+                # Ensure DesignLifeEnd occurs after ConstructionAcceptance in the same process
+                sh:sparql [
+                    sh:select """
+                        PREFIX occp: <http://www.semanticweb.org/DigitalizeMe/ontologies/2025/3/OCCP#>
+                        PREFIX ocp: <http://www.semanticweb.org/DigitalizeMe/ontologies/2025/3/OCP#>
+                        PREFIX time: <http://www.w3.org/2006/time#>
+                        SELECT $this
+                        WHERE {
+                            $this ocp:endsPhase ?phase .
+                            ?phase ocp:belongsToProcess ?process .
+                            $this ocp:hasActualTime ?timeDLE .
+                            ?constAccept a occp:ConstructionAcceptance .
+                            ?constAccept ocp:belongsToProcess ?process .
+                            ?constAccept ocp:hasActualTime ?timeCA .
+                            FILTER (?timeDLE <= ?timeCA)
+                        }
+                    """ ;
+                    sh:message "For 'occp:DesignLifeEnd': Actual time (ocp:hasActualTime) must occur after 'occp:ConstructionAcceptance' in the same process."@en ;
+                    sh:severity sh:Violation
+                ] .
+
+
+    ### PHASE G INSTANTS
+        # PHASE ASSIGNMENT
+            ocsh:PhaseGInstantShape a sh:NodeShape ;
+                sh:targetClass occp:PhaseG_Inspection_Instant ;
+                sh:property [
+                    sh:path ocp:belongsToPhase ;
+                    sh:class occp:PhaseG_Inspection ;
+                    sh:minCount 1 ;
+                    sh:maxCount 1 ;
+                    sh:message "Each 'occp:PhaseG_Inspection_Instant' must belong to exactly one 'occp:PhaseG_Inspection' via 'ocp:belongsToPhase'."@en ;
+                    sh:severity sh:Violation ;
+                ] .
+
+        ### INSTANT SHAPES PHASE G - INSPECTION
+
+            ocsh:InspectionExecutionShape a sh:NodeShape ;
+                sh:targetClass occp:InspectionExecution ;
+                # Instant belongs to Phase G (Inspection)
+                sh:property [
+                    sh:path ocp:belongsToPhase ;
+                    sh:class occp:PhaseG_Inspection ;
+                    sh:minCount 1 ;
+                    sh:maxCount 1 ;
+                    sh:message "Each 'occp:InspectionExecution' must belong to exactly one 'occp:PhaseG_Inspection' via 'ocp:belongsToPhase'."@en ;
+                    sh:severity sh:Violation
+                ] ;
+                # Ensure InspectionExecution occurs after ConstructionStart in the same process
+                sh:sparql [
+                    sh:select """
+                        PREFIX occp: <http://www.semanticweb.org/DigitalizeMe/ontologies/2025/3/OCCP#>
+                        PREFIX ocp: <http://www.semanticweb.org/DigitalizeMe/ontologies/2025/3/OCP#>
+                        PREFIX time: <http://www.w3.org/2006/time#>
+                        SELECT $this
+                        WHERE {
+                            $this ocp:belongsToPhase ?phase .
+                            ?phase ocp:belongsToProcess ?process .
+                            $this ocp:hasActualTime ?timeIE .
+                            ?constStart a occp:ConstructionStart .
+                            ?constStart ocp:belongsToProcess ?process .
+                            ?constStart ocp:hasActualTime ?timeCS .
+                            FILTER (?timeIE <= ?timeCS)
+                        }
+                    """ ;
+                    sh:message "For 'occp:InspectionExecution': Actual time (ocp:hasActualTime) must occur after 'occp:ConstructionStart' in the same process."@en ;
+                    sh:severity sh:Violation
+                ] ;
+                # Ensure InspectionExecution occurs after UsageStart in the same phase
+                sh:sparql [
+                    sh:select """
+                        PREFIX occp: <http://www.semanticweb.org/DigitalizeMe/ontologies/2025/3/OCCP#>
+                        PREFIX ocp: <http://www.semanticweb.org/DigitalizeMe/ontologies/2025/3/OCP#>
+                        PREFIX time: <http://www.w3.org/2006/time#>
+                        SELECT $this
+                        WHERE {
+                            $this ocp:belongsToPhase ?phase .
+                            $this ocp:hasActualTime ?timeIE .
+                            ?usageStart a occp:UsageStart .
+                            ?usageStart ocp:belongsToPhase ?phase .
+                            ?usageStart ocp:hasActualTime ?timeUS .
+                            FILTER (?timeIE <= ?timeUS)
+                        }
+                    """ ;
+                    sh:message "For 'occp:InspectionExecution': Actual time (ocp:hasActualTime) must occur after 'occp:UsageStart' in the same 'occp:PhaseG_Inspection'."@en ;
+                    sh:severity sh:Violation
+                ] ;
+                # Ensure InspectionExecution occurs after UsageChange in the same phase
+                sh:sparql [
+                    sh:select """
+                        PREFIX occp: <http://www.semanticweb.org/DigitalizeMe/ontologies/2025/3/OCCP#>
+                        PREFIX ocp: <http://www.semanticweb.org/DigitalizeMe/ontologies/2025/3/OCP#>
+                        PREFIX time: <http://www.w3.org/2006/time#>
+                        SELECT $this
+                        WHERE {
+                            $this ocp:belongsToPhase ?phase .
+                            $this ocp:hasActualTime ?timeIE .
+                            ?usageChange a occp:UsageChange .
+                            ?usageChange ocp:belongsToPhase ?phase .
+                            ?usageChange ocp:hasActualTime ?timeUC .
+                            FILTER (?timeIE <= ?timeUC)
+                        }
+                    """ ;
+                    sh:message "For 'occp:InspectionExecution': Actual time (ocp:hasActualTime) must occur after 'occp:UsageChange' in the same 'occp:PhaseG_Inspection'."@en ;
+                    sh:severity sh:Violation
+                ] ;
+                # Ensure InspectionExecution occurs before DeconstructionStart in the same process
+                sh:sparql [
+                    sh:select """
+                        PREFIX occp: <http://www.semanticweb.org/DigitalizeMe/ontologies/2025/3/OCCP#>
+                        PREFIX ocp: <http://www.semanticweb.org/DigitalizeMe/ontologies/2025/3/OCP#>
+                        PREFIX time: <http://www.w3.org/2006/time#>
+                        SELECT $this
+                        WHERE {
+                            $this ocp:belongsToPhase ?phase .
+                            ?phase ocp:belongsToProcess ?process .
+                            $this ocp:hasActualTime ?timeIE .
+                            ?deconStart a occp:DeconstructionStart .
+                            ?deconStart ocp:belongsToProcess ?process .
+                            ?deconStart ocp:hasActualTime ?timeDS .
+                            FILTER (?timeIE >= ?timeDS)
+                        }
+                    """ ;
+                    sh:message "For 'occp:InspectionExecution': Actual time (ocp:hasActualTime) must occur before 'occp:DeconstructionStart' in the same process."@en ;
+                    sh:severity sh:Violation
+                ] .
+
+            ocsh:IrregularInspectionShape a sh:NodeShape ;
+                sh:targetClass occp:IrregularInspection ;
+                # Instant belongs to Phase G (Inspection)
+                sh:property [
+                    sh:path ocp:belongsToPhase ;
+                    sh:class occp:PhaseG_Inspection ;
+                    sh:minCount 1 ;
+                    sh:maxCount 1 ;
+                    sh:message "Each 'occp:IrregularInspection' must belong to exactly one 'occp:PhaseG_Inspection' via 'ocp:belongsToPhase'."@en ;
+                    sh:severity sh:Violation
+                ] ;
+                # Ensure IrregularInspection occurs after UsageStart in the same phase
+                sh:sparql [
+                    sh:select """
+                        PREFIX occp: <http://www.semanticweb.org/DigitalizeMe/ontologies/2025/3/OCCP#>
+                        PREFIX ocp: <http://www.semanticweb.org/DigitalizeMe/ontologies/2025/3/OCP#>
+                        PREFIX time: <http://www.w3.org/2006/time#>
+                        SELECT $this
+                        WHERE {
+                            $this ocp:belongsToPhase ?phase .
+                            $this ocp:hasActualTime ?timeII .
+                            ?usageStart a occp:UsageStart .
+                            ?usageStart ocp:belongsToPhase ?phase .
+                            ?usageStart ocp:hasActualTime ?timeUS .
+                            FILTER (?timeII <= ?timeUS)
+                        }
+                    """ ;
+                    sh:message "For 'occp:IrregularInspection': Actual time (ocp:hasActualTime) must occur after 'occp:UsageStart' in the same 'occp:PhaseG_Inspection'."@en ;
+                    sh:severity sh:Violation
+                ] ;
+                # Ensure IrregularInspection occurs before DeconstructionStart in the same process
+                sh:sparql [
+                    sh:select """
+                        PREFIX occp: <http://www.semanticweb.org/DigitalizeMe/ontologies/2025/3/OCCP#>
+                        PREFIX ocp: <http://www.semanticweb.org/DigitalizeMe/ontologies/2025/3/OCP#>
+                        PREFIX time: <http://www.w3.org/2006/time#>
+                        SELECT $this
+                        WHERE {
+                            $this ocp:belongsToPhase ?phase .
+                            ?phase ocp:belongsToProcess ?process .
+                            $this ocp:hasActualTime ?timeII .
+                            ?deconStart a occp:DeconstructionStart .
+                            ?deconStart ocp:belongsToProcess ?process .
+                            ?deconStart ocp:hasActualTime ?timeDS .
+                            FILTER (?timeII >= ?timeDS)
+                        }
+                    """ ;
+                    sh:message "For 'occp:IrregularInspection': Actual time (ocp:hasActualTime) must occur before 'occp:DeconstructionStart' in the same process."@en ;
+                    sh:severity sh:Violation
+                ] .
+
+            ocsh:NextRegularInspectionShape a sh:NodeShape ;
+                sh:targetClass occp:NextRegularInspection ;
+                # Instant belongs to Phase G (Inspection)
+                sh:property [
+                    sh:path ocp:belongsToPhase ;
+                    sh:class occp:PhaseG_Inspection ;
+                    sh:minCount 1 ;
+                    sh:maxCount 1 ;
+                    sh:message "Each 'occp:NextRegularInspection' must belong to exactly one 'occp:PhaseG_Inspection' via 'ocp:belongsToPhase'."@en ;
+                    sh:severity sh:Violation
+                ] ;
+                # Ensure NextRegularInspection occurs after InspectionExecution in the same phase
+                sh:sparql [
+                    sh:select """
+                        PREFIX occp: <http://www.semanticweb.org/DigitalizeMe/ontologies/2025/3/OCCP#>
+                        PREFIX ocp: <http://www.semanticweb.org/DigitalizeMe/ontologies/2025/3/OCP#>
+                        PREFIX time: <http://www.w3.org/2006/time#>
+                        SELECT $this
+                        WHERE {
+                            $this ocp:belongsToPhase ?phase .
+                            $this ocp:hasActualTime ?timeNRI .
+                            ?inspExec a occp:InspectionExecution .
+                            ?inspExec ocp:belongsToPhase ?phase .
+                            ?inspExec ocp:hasActualTime ?timeIE .
+                            FILTER (?timeNRI <= ?timeIE)
+                        }
+                    """ ;
+                    sh:message "For 'occp:NextRegularInspection': Actual time (ocp:hasActualTime) must occur after 'occp:InspectionExecution' in the same 'occp:PhaseG_Inspection'."@en ;
+                    sh:severity sh:Violation
+                ] ;
+                # Ensure NextRegularInspection occurs after UsageStart in the same phase
+                sh:sparql [
+                    sh:select """
+                        PREFIX occp: <http://www.semanticweb.org/DigitalizeMe/ontologies/2025/3/OCCP#>
+                        PREFIX ocp: <http://www.semanticweb.org/DigitalizeMe/ontologies/2025/3/OCP#>
+                        PREFIX time: <http://www.w3.org/2006/time#>
+                        SELECT $this
+                        WHERE {
+                            $this ocp:belongsToPhase ?phase .
+                            $this ocp:hasActualTime ?timeNRI .
+                            ?usageStart a occp:UsageStart .
+                            ?usageStart ocp:belongsToPhase ?phase .
+                            ?usageStart ocp:hasActualTime ?timeUS .
+                            FILTER (?timeNRI <= ?timeUS)
+                        }
+                    """ ;
+                    sh:message "For 'occp:NextRegularInspection': Actual time (ocp:hasActualTime) must occur after 'occp:UsageStart' in the same 'occp:PhaseG_Inspection'."@en ;
+                    sh:severity sh:Violation
+                ] ;
+                # Ensure NextRegularInspection occurs before DeconstructionStart in the same process
+                sh:sparql [
+                    sh:select """
+                        PREFIX occp: <http://www.semanticweb.org/DigitalizeMe/ontologies/2025/3/OCCP#>
+                        PREFIX ocp: <http://www.semanticweb.org/DigitalizeMe/ontologies/2025/3/OCP#>
+                        PREFIX time: <http://www.w3.org/2006/time#>
+                        SELECT $this
+                        WHERE {
+                            $this ocp:belongsToPhase ?phase .
+                            ?phase ocp:belongsToProcess ?process .
+                            $this ocp:hasActualTime ?timeNRI .
+                            ?deconStart a occp:DeconstructionStart .
+                            ?deconStart ocp:belongsToProcess ?process .
+                            ?deconStart ocp:hasActualTime ?timeDS .
+                            FILTER (?timeNRI >= ?timeDS)
+                        }
+                    """ ;
+                    sh:message "For 'occp:NextRegularInspection': Actual time (ocp:hasActualTime) must occur before 'occp:DeconstructionStart' in the same process."@en ;
+                    sh:severity sh:Violation
+                ] .
+
+
+    ### PHASE H INSTANTS
+        # PHASE ASSIGNMENT
+            ocsh:PhaseHInstantShape a sh:NodeShape ;
+                sh:targetClass occp:PhaseH_SpecialEvents_Instant ;
+                sh:property [
+                    sh:path ocp:belongsToPhase ;
+                    sh:class occp:PhaseH_SpecialEvents ;
+                    sh:minCount 1 ;
+                    sh:maxCount 1 ;
+                    sh:message "Each 'occp:PhaseH_SpecialEvents_Instant' must belong to exactly one 'occp:PhaseH_SpecialEvents' via 'ocp:belongsToPhase'."@en ;
+                    sh:severity sh:Violation ;
+                ] .
+
+        ### INSTANT SHAPES PHASE H - SPECIAL EVENTS
+
+            ocsh:GeologicalEventShape a sh:NodeShape ;
+                sh:targetClass occp:GeologicalEvent ;
+                # Ensure GeologicalEvent occurs after ConstructionAcceptance in the same process
+                sh:sparql [
+                    sh:select """
+                        PREFIX occp: <http://www.semanticweb.org/DigitalizeMe/ontologies/2025/3/OCCP#>
+                        PREFIX ocp: <http://www.semanticweb.org/DigitalizeMe/ontologies/2025/3/OCP#>
+                        PREFIX time: <http://www.w3.org/2006/time#>
+                        SELECT $this
+                        WHERE {
+                            $this ocp:belongsToProcess ?process .
+                            $this ocp:hasActualTime ?timeGE .
+                            ?constAccept a occp:ConstructionAcceptance .
+                            ?constAccept ocp:belongsToProcess ?process .
+                            ?constAccept ocp:hasActualTime ?timeCA .
+                            FILTER (?timeGE <= ?timeCA)
+                        }
+                    """ ;
+                    sh:message "For 'occp:GeologicalEvent': Actual time (ocp:hasActualTime) must occur after 'occp:ConstructionAcceptance' in the same process."@en ;
+                    sh:severity sh:Violation
+                ] ;
+                # Ensure GeologicalEvent occurs before DeconstructionStart in the same process (if DeconstructionStart exists)
+                sh:sparql [
+                    sh:select """
+                        PREFIX occp: <http://www.semanticweb.org/DigitalizeMe/ontologies/2025/3/OCCP#>
+                        PREFIX ocp: <http://www.semanticweb.org/DigitalizeMe/ontologies/2025/3/OCP#>
+                        PREFIX time: <http://www.w3.org/2006/time#>
+                        SELECT $this
+                        WHERE {
+                            $this ocp:belongsToProcess ?process .
+                            $this ocp:hasActualTime ?timeGE .
+                            ?deconStart a occp:DeconstructionStart .
+                            ?deconStart ocp:belongsToProcess ?process .
+                            ?deconStart ocp:hasActualTime ?timeDS .
+                            FILTER (?timeGE >= ?timeDS)
+                        }
+                    """ ;
+                    sh:message "For 'occp:GeologicalEvent': Actual time (ocp:hasActualTime) must occur before 'occp:DeconstructionStart' in the same process."@en ;
+                    sh:severity sh:Violation
+                ] .
+
+            ocsh:LoadEventShape a sh:NodeShape ;
+                sh:targetClass occp:LoadEvent ;
+                # Ensure LoadEvent occurs after ConstructionAcceptance in the same process
+                sh:sparql [
+                    sh:select """
+                        PREFIX occp: <http://www.semanticweb.org/DigitalizeMe/ontologies/2025/3/OCCP#>
+                        PREFIX ocp: <http://www.semanticweb.org/DigitalizeMe/ontologies/2025/3/OCP#>
+                        PREFIX time: <http://www.w3.org/2006/time#>
+                        SELECT $this
+                        WHERE {
+                            $this ocp:belongsToProcess ?process .
+                            $this ocp:hasActualTime ?timeLE .
+                            ?constAccept a occp:ConstructionAcceptance .
+                            ?constAccept ocp:belongsToProcess ?process .
+                            ?constAccept ocp:hasActualTime ?timeCA .
+                            FILTER (?timeLE <= ?timeCA)
+                        }
+                    """ ;
+                    sh:message "For 'occp:LoadEvent': Actual time (ocp:hasActualTime) must occur after 'occp:ConstructionAcceptance' in the same process."@en ;
+                    sh:severity sh:Violation
+                ] ;
+                # Ensure LoadEvent occurs before DeconstructionStart in the same process (if DeconstructionStart exists)
+                sh:sparql [
+                    sh:select """
+                        PREFIX occp: <http://www.semanticweb.org/DigitalizeMe/ontologies/2025/3/OCCP#>
+                        PREFIX ocp: <http://www.semanticweb.org/DigitalizeMe/ontologies/2025/3/OCP#>
+                        PREFIX time: <http://www.w3.org/2006/time#>
+                        SELECT $this
+                        WHERE {
+                            $this ocp:belongsToProcess ?process .
+                            $this ocp:hasActualTime ?timeLE .
+                            ?deconStart a occp:DeconstructionStart .
+                            ?deconStart ocp:belongsToProcess ?process .
+                            ?deconStart ocp:hasActualTime ?timeDS .
+                            FILTER (?timeLE >= ?timeDS)
+                        }
+                    """ ;
+                    sh:message "For 'occp:LoadEvent': Actual time (ocp:hasActualTime) must occur before 'occp:DeconstructionStart' in the same process."@en ;
+                    sh:severity sh:Violation
+                ] .
+
+            ocsh:LoadEventShape a sh:NodeShape ;
+                sh:targetClass occp:LoadEvent ;
+                # Ensure LoadEvent occurs after ConstructionAcceptance in the same process
+                sh:sparql [
+                    sh:select """
+                        PREFIX occp: <http://www.semanticweb.org/DigitalizeMe/ontologies/2025/3/OCCP#>
+                        PREFIX ocp: <http://www.semanticweb.org/DigitalizeMe/ontologies/2025/3/OCP#>
+                        PREFIX time: <http://www.w3.org/2006/time#>
+                        SELECT $this
+                        WHERE {
+                            $this ocp:belongsToProcess ?process .
+                            $this ocp:hasActualTime ?timeLE .
+                            ?constAccept a occp:ConstructionAcceptance .
+                            ?constAccept ocp:belongsToProcess ?process .
+                            ?constAccept ocp:hasActualTime ?timeCA .
+                            FILTER (?timeLE <= ?timeCA)
+                        }
+                    """ ;
+                    sh:message "For 'occp:LoadEvent': Actual time (ocp:hasActualTime) must occur after 'occp:ConstructionAcceptance' in the same process."@en ;
+                    sh:severity sh:Violation
+                ] ;
+                # Ensure LoadEvent occurs before DeconstructionStart in the same process (if DeconstructionStart exists)
+                sh:sparql [
+                    sh:select """
+                        PREFIX occp: <http://www.semanticweb.org/DigitalizeMe/ontologies/2025/3/OCCP#>
+                        PREFIX ocp: <http://www.semanticweb.org/DigitalizeMe/ontologies/2025/3/OCP#>
+                        PREFIX time: <http://www.w3.org/2006/time#>
+                        SELECT $this
+                        WHERE {
+                            $this ocp:belongsToProcess ?process .
+                            $this ocp:hasActualTime ?timeLE .
+                            ?deconStart a occp:DeconstructionStart .
+                            ?deconStart ocp:belongsToProcess ?process .
+                            ?deconStart ocp:hasActualTime ?timeDS .
+                            FILTER (?timeLE >= ?timeDS)
+                        }
+                    """ ;
+                    sh:message "For 'occp:LoadEvent': Actual time (ocp:hasActualTime) must occur before 'occp:DeconstructionStart' in the same process."@en ;
+                    sh:severity sh:Violation
+                ] .
+
+            ocsh:WeatherEventShape a sh:NodeShape ;
+                sh:targetClass occp:WeatherEvent ;
+                # Ensure WeatherEvent occurs after ConstructionAcceptance in the same process
+                sh:sparql [
+                    sh:select """
+                        PREFIX occp: <http://www.semanticweb.org/DigitalizeMe/ontologies/2025/3/OCCP#>
+                        PREFIX ocp: <http://www.semanticweb.org/DigitalizeMe/ontologies/2025/3/OCP#>
+                        PREFIX time: <http://www.w3.org/2006/time#>
+                        SELECT $this
+                        WHERE {
+                            $this ocp:belongsToProcess ?process .
+                            $this ocp:hasActualTime ?timeWE .
+                            ?constAccept a occp:ConstructionAcceptance .
+                            ?constAccept ocp:belongsToProcess ?process .
+                            ?constAccept ocp:hasActualTime ?timeCA .
+                            FILTER (?timeWE <= ?timeCA)
+                        }
+                    """ ;
+                    sh:message "For 'occp:WeatherEvent': Actual time (ocp:hasActualTime) must occur after 'occp:ConstructionAcceptance' in the same process."@en ;
+                    sh:severity sh:Violation
+                ] ;
+                # Ensure WeatherEvent occurs before DeconstructionStart in the same process (if DeconstructionStart exists)
+                sh:sparql [
+                    sh:select """
+                        PREFIX occp: <http://www.semanticweb.org/DigitalizeMe/ontologies/2025/3/OCCP#>
+                        PREFIX ocp: <http://www.semanticweb.org/DigitalizeMe/ontologies/2025/3/OCP#>
+                        PREFIX time: <http://www.w3.org/2006/time#>
+                        SELECT $this
+                        WHERE {
+                            $this ocp:belongsToProcess ?process .
+                            $this ocp:hasActualTime ?timeWE .
+                            ?deconStart a occp:DeconstructionStart .
+                            ?deconStart ocp:belongsToProcess ?process .
+                            ?deconStart ocp:hasActualTime ?timeDS .
+                            FILTER (?timeWE >= ?timeDS)
+                        }
+                    """ ;
+                    sh:message "For 'occp:WeatherEvent': Actual time (ocp:hasActualTime) must occur before 'occp:DeconstructionStart' in the same process."@en ;
+                    sh:severity sh:Violation
+                ] .
+
+
+    ### PHASE K INSTANTS
+        # PHASE ASSIGNMENT
+            ocsh:PhaseKInstantShape a sh:NodeShape ;
+                sh:targetClass occp:PhaseK_Damage_Instant ;
+                sh:property [
+                    sh:path ocp:belongsToPhase ;
+                    sh:class occp:PhaseK_Damage ;
+                    sh:minCount 1 ;
+                    sh:maxCount 1 ;
+                    sh:message "Each 'occp:PhaseK_Damage_Instant' must belong to exactly one 'occp:PhaseK_Damage' via 'ocp:belongsToPhase'."@en ;
+                    sh:severity sh:Violation ;
+                ] .
+
+        ### INSTANT SHAPES PHASE K - DAMAGE
+
+            ocsh:DamageDetectionShape a sh:NodeShape ;
+                sh:targetClass occp:DamageDetection ;
+                # Instant starts a new Phase K (Damage)
+                sh:property [
+                    sh:path ocp:startsPhase ;
+                    sh:class occp:PhaseK_Damage ;
+                    sh:minCount 1 ;
+                    sh:maxCount 1 ;
+                    sh:message "Each 'occp:DamageDetection' must start exactly one 'occp:PhaseK_Damage' via 'ocp:startsPhase'."@en ;
+                    sh:severity sh:Violation
+                ] ;
+                # Ensure DamageDetection occurs after ConstructionAcceptance in the same process
+                sh:sparql [
+                    sh:select """
+                        PREFIX occp: <http://www.semanticweb.org/DigitalizeMe/ontologies/2025/3/OCCP#>
+                        PREFIX ocp: <http://www.semanticweb.org/DigitalizeMe/ontologies/2025/3/OCP#>
+                        PREFIX time: <http://www.w3.org/2006/time#>
+                        SELECT $this
+                        WHERE {
+                            $this ocp:startsPhase ?phase .
+                            ?phase ocp:belongsToProcess ?process .
+                            $this ocp:hasActualTime ?timeDD .
+                            ?conAccept a occp:ConstructionAcceptance .
+                            ?conAccept ocp:belongsToProcess ?process .
+                            ?conAccept ocp:hasActualTime ?timeCA .
+                            FILTER (?timeDD <= ?timeCA)
+                        }
+                    """ ;
+                    sh:message "For 'occp:DamageDetection': Actual time (ocp:hasActualTime) must occur after 'occp:ConstructionAcceptance' in the same process."@en ;
+                    sh:severity sh:Violation
+                ] ;
+                # Ensure DamageDetection occurs before DeconstructionStart in the same process
+                sh:sparql [
+                    sh:select """
+                        PREFIX occp: <http://www.semanticweb.org/DigitalizeMe/ontologies/2025/3/OCCP#>
+                        PREFIX ocp: <http://www.semanticweb.org/DigitalizeMe/ontologies/2025/3/OCP#>
+                        PREFIX time: <http://www.w3.org/2006/time#>
+                        SELECT $this
+                        WHERE {
+                            $this ocp:startsPhase ?phase .
+                            ?phase ocp:belongsToProcess ?process .
+                            $this ocp:hasActualTime ?timeDD .
+                            ?deconStart a occp:DeconstructionStart .
+                            ?deconStart ocp:belongsToProcess ?process .
+                            ?deconStart ocp:hasActualTime ?timeDS .
+                            FILTER (?timeDD >= ?timeDS)
+                        }
+                    """ ;
+                    sh:message "For 'occp:DamageDetection': Actual time (ocp:hasActualTime) must occur before 'occp:DeconstructionStart' in the same process."@en ;
+                    sh:severity sh:Violation
+                ] ;
+                # Ensure DamageDetection occurs before DamageObservation in the same phase (if DamageObservation exists)
+                sh:sparql [
+                    sh:select """
+                        PREFIX occp: <http://www.semanticweb.org/DigitalizeMe/ontologies/2025/3/OCCP#>
+                        PREFIX ocp: <http://www.semanticweb.org/DigitalizeMe/ontologies/2025/3/OCP#>
+                        PREFIX time: <http://www.w3.org/2006/time#>
+                        SELECT $this
+                        WHERE {
+                            $this ocp:startsPhase ?phase .
+                            $this ocp:hasActualTime ?timeDD .
+                            ?damageObs a occp:DamageObservation .
+                            ?damageObs ocp:belongsToPhase ?phase .
+                            ?damageObs ocp:hasActualTime ?timeDO .
+                            FILTER (?timeDD >= ?timeDO)
+                        }
+                    """ ;
+                    sh:message "For 'occp:DamageDetection': Actual time (ocp:hasActualTime) must occur before 'occp:DamageObservation' in the same 'occp:PhaseK_Damage'."@en ;
+                    sh:severity sh:Violation
+                ] .
+
+            ocsh:DamageObservationShape a sh:NodeShape ;
+                sh:targetClass occp:DamageObservation ;
+                # Instant belongs to a Phase K (Damage)
+                sh:property [
+                    sh:path ocp:belongsToPhase ;
+                    sh:class occp:PhaseK_Damage ;
+                    sh:minCount 1 ;
+                    sh:maxCount 1 ;
+                    sh:message "Each 'occp:DamageObservation' must belong to exactly one 'occp:PhaseK_Damage' via 'ocp:belongsToPhase'."@en ;
+                    sh:severity sh:Violation
+                ] ;
+                # Ensure DamageObservation occurs after DamageDetection in the same phase
+                sh:sparql [
+                    sh:select """
+                        PREFIX occp: <http://www.semanticweb.org/DigitalizeMe/ontologies/2025/3/OCCP#>
+                        PREFIX ocp: <http://www.semanticweb.org/DigitalizeMe/ontologies/2025/3/OCP#>
+                        PREFIX time: <http://www.w3.org/2006/time#>
+                        SELECT $this
+                        WHERE {
+                            $this ocp:belongsToPhase ?phase .
+                            $this ocp:hasActualTime ?timeDO .
+                            ?damageDetect a occp:DamageDetection .
+                            ?damageDetect ocp:startsPhase ?phase .
+                            ?damageDetect ocp:hasActualTime ?timeDD .
+                            FILTER (?timeDO <= ?timeDD)
+                        }
+                    """ ;
+                    sh:message "For 'occp:DamageObservation': Actual time (ocp:hasActualTime) must occur after 'occp:DamageDetection' in the same 'occp:PhaseK_Damage'."@en ;
+                    sh:severity sh:Violation
+                ] ;
+                # Ensure DamageObservation occurs before DeconstructionStart in the same process
+                sh:sparql [
+                    sh:select """
+                        PREFIX occp: <http://www.semanticweb.org/DigitalizeMe/ontologies/2025/3/OCCP#>
+                        PREFIX ocp: <http://www.semanticweb.org/DigitalizeMe/ontologies/2025/3/OCP#>
+                        PREFIX time: <http://www.w3.org/2006/time#>
+                        SELECT $this
+                        WHERE {
+                            $this ocp:belongsToPhase ?phase .
+                            ?phase ocp:belongsToProcess ?process .
+                            $this ocp:hasActualTime ?timeDO .
+                            ?deconStart a occp:DeconstructionStart .
+                            ?deconStart ocp:belongsToProcess ?process .
+                            ?deconStart ocp:hasActualTime ?timeDS .
+                            FILTER (?timeDO >= ?timeDS)
+                        }
+                    """ ;
+                    sh:message "For 'occp:DamageObservation': Actual time (ocp:hasActualTime) must occur before 'occp:DeconstructionStart' in the same process."@en ;
+                    sh:severity sh:Violation
+                ] .
+
+            ocsh:DamageRepairShape a sh:NodeShape ;
+                sh:targetClass occp:DamageRepair ;
+                # Instant ends a Phase K (Damage)
+                sh:property [
+                    sh:path ocp:endsPhase ;
+                    sh:class occp:PhaseK_Damage ;
+                    sh:minCount 1 ;
+                    sh:maxCount 1 ;
+                    sh:message "Each 'occp:DamageRepair' must end exactly one 'occp:PhaseK_Damage' via 'ocp:endsPhase'."@en ;  # Korrigierte Message
+                    sh:severity sh:Violation
+                ] ;
+                # Ensure DamageRepair occurs after DamageDetection in the same phase
+                sh:sparql [
+                    sh:select """
+                        PREFIX occp: <http://www.semanticweb.org/DigitalizeMe/ontologies/2025/3/OCCP#>
+                        PREFIX ocp: <http://www.semanticweb.org/DigitalizeMe/ontologies/2025/3/OCP#>
+                        PREFIX time: <http://www.w3.org/2006/time#>
+                        SELECT $this
+                        WHERE {
+                            $this ocp:endsPhase ?phase .
+                            $this ocp:hasActualTime ?timeDR .
+                            ?damageDetect a occp:DamageDetection .
+                            ?damageDetect ocp:startsPhase ?phase .
+                            ?damageDetect ocp:hasActualTime ?timeDD .
+                            FILTER (?timeDR <= ?timeDD)
+                        }
+                    """ ;
+                    sh:message "For 'occp:DamageRepair': Actual time (ocp:hasActualTime) must occur after 'occp:DamageDetection' in the same 'occp:PhaseK_Damage'."@en ;
+                    sh:severity sh:Violation
+                ] ;
+                # Ensure DamageRepair occurs before DeconstructionStart in the same process
+                sh:sparql [
+                    sh:select """
+                        PREFIX occp: <http://www.semanticweb.org/DigitalizeMe/ontologies/2025/3/OCCP#>
+                        PREFIX ocp: <http://www.semanticweb.org/DigitalizeMe/ontologies/2025/3/OCP#>
+                        PREFIX time: <http://www.w3.org/2006/time#>
+                        SELECT $this
+                        WHERE {
+                            $this ocp:endsPhase ?phase .
+                            ?phase ocp:belongsToProcess ?process .
+                            $this ocp:hasActualTime ?timeDR .
+                            ?deconStart a occp:DeconstructionStart .
+                            ?deconStart ocp:belongsToProcess ?process .
+                            ?deconStart ocp:hasActualTime ?timeDS .
+                            FILTER (?timeDR >= ?timeDS)
+                        }
+                    """ ;
+                    sh:message "For 'occp:DamageRepair': Actual time (ocp:hasActualTime) must occur before 'occp:DeconstructionStart' in the same process."@en ;
+                    sh:severity sh:Violation
+                ] .
+
+
+    ### PHASE L INSTANTS
+        # PHASE ASSIGNMENT
+            ocsh:PhaseLInstantShape a sh:NodeShape ;
+                sh:targetClass occp:PhaseL_Repair_Instant ;
+                sh:property [
+                    sh:path ocp:belongsToPhase ;
+                    sh:class occp:PhaseL_Repair ;
+                    sh:minCount 1 ;
+                    sh:maxCount 1 ;
+                    sh:message "Each 'occp:PhaseL_Repair_Instant' must belong to exactly one 'occp:PhaseL_Repair' via 'ocp:belongsToPhase'."@en ;
+                    sh:severity sh:Violation ;
+                ] .
+
+        # PHASE ASSIGNMENT
+
+            ocsh:NewComponentShape a sh:NodeShape ;
+                sh:targetClass occp:NewComponent ;
+                # Instant belongs to a Phase L (Repair)
+                sh:property [
+                    sh:path ocp:belongsToPhase ;
+                    sh:class occp:PhaseL_Repair ;
+                    sh:minCount 1 ;
+                    sh:maxCount 1 ;
+                    sh:message "Each 'occp:NewComponent' must belong to exactly one 'occp:PhaseL_Repair' via 'ocp:belongsToPhase'."@en ;
+                    sh:severity sh:Violation
+                ] ;
+                # Ensure NewComponent occurs after ConstructionCompletion in the same process
+                sh:sparql [
+                    sh:select """
+                        PREFIX occp: <http://www.semanticweb.org/DigitalizeMe/ontologies/2025/3/OCCP#>
+                        PREFIX ocp: <http://www.semanticweb.org/DigitalizeMe/ontologies/2025/3/OCP#>
+                        PREFIX time: <http://www.w3.org/2006/time#>
+                        SELECT $this
+                        WHERE {
+                            $this ocp:belongsToPhase ?phase .
+                            ?phase ocp:belongsToProcess ?process .
+                            $this ocp:hasActualTime ?timeNC .
+                            ?constComp a occp:ConstructionCompletion .
+                            ?constComp ocp:belongsToProcess ?process .
+                            ?constComp ocp:hasActualTime ?timeCC .
+                            FILTER (?timeNC <= ?timeCC)
+                        }
+                    """ ;
+                    sh:message "For 'occp:NewComponent': Actual time (ocp:hasActualTime) must occur after 'occp:ConstructionCompletion' in the same process."@en ;
+                    sh:severity sh:Violation
+                ] ;
+                # Ensure NewComponent occurs before DeconstructionStart in the same process
+                sh:sparql [
+                    sh:select """
+                        PREFIX occp: <http://www.semanticweb.org/DigitalizeMe/ontologies/2025/3/OCCP#>
+                        PREFIX ocp: <http://www.semanticweb.org/DigitalizeMe/ontologies/2025/3/OCP#>
+                        PREFIX time: <http://www.w3.org/2006/time#>
+                        SELECT $this
+                        WHERE {
+                            $this ocp:belongsToPhase ?phase .
+                            ?phase ocp:belongsToProcess ?process .
+                            $this ocp:hasActualTime ?timeNC .
+                            ?deconStart a occp:DeconstructionStart .
+                            ?deconStart ocp:belongsToProcess ?process .
+                            ?deconStart ocp:hasActualTime ?timeDS .
+                            FILTER (?timeNC >= ?timeDS)
+                        }
+                    """ ;
+                    sh:message "For 'occp:NewComponent': Actual time (ocp:hasActualTime) must occur before 'occp:DeconstructionStart' in the same process."@en ;
+                    sh:severity sh:Violation
+                ] .
+
+            ocsh:RepairStartShape a sh:NodeShape ;
+                sh:targetClass occp:RepairStart ;
+                # Instant starts a new Phase L (Repair)
+                sh:property [
+                    sh:path ocp:startsPhase ;
+                    sh:class occp:PhaseL_Repair ;
+                    sh:minCount 1 ;
+                    sh:maxCount 1 ;
+                    sh:message "Each 'occp:RepairStart' must start exactly one 'occp:PhaseL_Repair' via 'ocp:startsPhase'."@en ;
+                    sh:severity sh:Violation
+                ] ;
+                # Ensure RepairStart occurs after DamageDetection in the same process
+                sh:sparql [
+                    sh:select """
+                        PREFIX occp: <http://www.semanticweb.org/DigitalizeMe/ontologies/2025/3/OCCP#>
+                        PREFIX ocp: <http://www.semanticweb.org/DigitalizeMe/ontologies/2025/3/OCP#>
+                        PREFIX time: <http://www.w3.org/2006/time#>
+                        SELECT $this
+                        WHERE {
+                            $this ocp:startsPhase ?phase .
+                            ?phase ocp:belongsToProcess ?process .
+                            $this ocp:hasActualTime ?timeRS .
+                            ?damageDet a occp:DamageDetection .
+                            ?damageDet ocp:belongsToProcess ?process .
+                            ?damageDet ocp:hasActualTime ?timeDD .
+                            FILTER (?timeRS <= ?timeDD)
+                        }
+                    """ ;
+                    sh:message "For 'occp:RepairStart': Actual time (ocp:hasActualTime) must occur after 'occp:DamageDetection' in the same process."@en ;
+                    sh:severity sh:Violation
+                ] ;
+                # Ensure RepairStart occurs before RepairCompletion in the same phase
+                sh:sparql [
+                    sh:select """
+                        PREFIX occp: <http://www.semanticweb.org/DigitalizeMe/ontologies/2025/3/OCCP#>
+                        PREFIX ocp: <http://www.semanticweb.org/DigitalizeMe/ontologies/2025/3/OCP#>
+                        PREFIX time: <http://www.w3.org/2006/time#>
+                        SELECT $this
+                        WHERE {
+                            $this ocp:startsPhase ?phase .
+                            $this ocp:hasActualTime ?timeRS .
+                            ?repairComp a occp:RepairCompletion .
+                            ?repairComp ocp:endsPhase ?phase .
+                            ?repairComp ocp:hasActualTime ?timeRC .
+                            FILTER (?timeRS >= ?timeRC)
+                        }
+                    """ ;
+                    sh:message "For 'occp:RepairStart': Actual time (ocp:hasActualTime) must occur before 'occp:RepairCompletion' in the same 'occp:PhaseL_Repair'."@en ;
+                    sh:severity sh:Violation
+                ] ;
+                # Ensure RepairStart occurs before DeconstructionStart in the same process
+                sh:sparql [
+                    sh:select """
+                        PREFIX occp: <http://www.semanticweb.org/DigitalizeMe/ontologies/2025/3/OCCP#>
+                        PREFIX ocp: <http://www.semanticweb.org/DigitalizeMe/ontologies/2025/3/OCP#>
+                        PREFIX time: <http://www.w3.org/2006/time#>
+                        SELECT $this
+                        WHERE {
+                            $this ocp:startsPhase ?phase .
+                            ?phase ocp:belongsToProcess ?process .
+                            $this ocp:hasActualTime ?timeRS .
+                            ?deconStart a occp:DeconstructionStart .
+                            ?deconStart ocp:belongsToProcess ?process .
+                            ?deconStart ocp:hasActualTime ?timeDS .
+                            FILTER (?timeRS >= ?timeDS)
+                        }
+                    """ ;
+                    sh:message "For 'occp:RepairStart': Actual time (ocp:hasActualTime) must occur before 'occp:DeconstructionStart' in the same process."@en ;
+                    sh:severity sh:Violation
+                ] .
+
+            ocsh:RepairCompletionShape a sh:NodeShape ;
+                sh:targetClass occp:RepairCompletion ;
+                # Instant ends a Phase L (Repair)
+                sh:property [
+                    sh:path ocp:endsPhase ;
+                    sh:class occp:PhaseL_Repair ;
+                    sh:minCount 1 ;
+                    sh:maxCount 1 ;
+                    sh:message "Each 'occp:RepairCompletion' must end exactly one 'occp:PhaseL_Repair' via 'ocp:endsPhase'."@en ;
+                    sh:severity sh:Violation
+                ] ;
+                # Ensure RepairCompletion occurs after RepairStart in the same phase
+                sh:sparql [
+                    sh:select """
+                        PREFIX occp: <http://www.semanticweb.org/DigitalizeMe/ontologies/2025/3/OCCP#>
+                        PREFIX ocp: <http://www.semanticweb.org/DigitalizeMe/ontologies/2025/3/OCP#>
+                        PREFIX time: <http://www.w3.org/2006/time#>
+                        SELECT $this
+                        WHERE {
+                            $this ocp:endsPhase ?phase .
+                            $this ocp:hasActualTime ?timeRC .
+                            ?repairStart a occp:RepairStart .
+                            ?repairStart ocp:startsPhase ?phase .
+                            ?repairStart ocp:hasActualTime ?timeRS .
+                            FILTER (?timeRC <= ?timeRS)
+                        }
+                    """ ;
+                    sh:message "For 'occp:RepairCompletion': Actual time (ocp:hasActualTime) must occur after 'occp:RepairStart' in the same 'occp:PhaseL_Repair'."@en ;
+                    sh:severity sh:Violation
+                ] ;
+                # Ensure RepairCompletion occurs before DeconstructionStart in the same process
+                sh:sparql [
+                    sh:select """
+                        PREFIX occp: <http://www.semanticweb.org/DigitalizeMe/ontologies/2025/3/OCCP#>
+                        PREFIX ocp: <http://www.semanticweb.org/DigitalizeMe/ontologies/2025/3/OCP#>
+                        PREFIX time: <http://www.w3.org/2006/time#>
+                        SELECT $this
+                        WHERE {
+                            $this ocp:endsPhase ?phase .
+                            ?phase ocp:belongsToProcess ?process .
+                            $this ocp:hasActualTime ?timeRC .
+                            ?deconStart a occp:DeconstructionStart .
+                            ?deconStart ocp:belongsToProcess ?process .
+                            ?deconStart ocp:hasActualTime ?timeDS .
+                            FILTER (?timeRC >= ?timeDS)
+                        }
+                    """ ;
+                    sh:message "For 'occp:RepairCompletion': Actual time (ocp:hasActualTime) must occur before 'occp:DeconstructionStart' in the same process."@en ;
+                    sh:severity sh:Violation
+                ] .
+
+
+    ### PHASE M INSTANTS
+        # PHASE ASSIGNMENT
+            ocsh:PhaseMInstantShape a sh:NodeShape ;
+                sh:targetClass occp:PhaseM_Deconstruction_Instant ;
+                sh:property [
+                    sh:path ocp:belongsToPhase ;
+                    sh:class occp:PhaseM_Deconstruction ;
+                    sh:minCount 1 ;
+                    sh:maxCount 1 ;
+                    sh:message "Each 'occp:PhaseM_Deconstruction_Instant' must belong to exactly one 'occp:PhaseM_Deconstruction' via 'ocp:belongsToPhase'."@en ;
+                    sh:severity sh:Violation ;
+                ] .
+
+        ### INSTANT SHAPES PHASE M - DECONSTRUCTION
+
+            ocsh:DeconstructionStartShape a sh:NodeShape ;
+                sh:targetClass occp:DeconstructionStart ;
+                # Instant starts a new Phase M (Deconstruction)
+                sh:property [
+                    sh:path ocp:startsPhase ;
+                    sh:class occp:PhaseM_Deconstruction ;
+                    sh:minCount 1 ;
+                    sh:maxCount 1 ;
+                    sh:message "Each 'occp:DeconstructionStart' must start exactly one 'occp:PhaseM_Deconstruction' via 'ocp:startsPhase'."@en ;
+                    sh:severity sh:Violation
+                ] ;
+                # Ensure DeconstructionStart occurs after ConstructionAcceptance in the same process
+                sh:sparql [
+                    sh:select """
+                        PREFIX occp: <http://www.semanticweb.org/DigitalizeMe/ontologies/2025/3/OCCP#>
+                        PREFIX ocp: <http://www.semanticweb.org/DigitalizeMe/ontologies/2025/3/OCP#>
+                        PREFIX time: <http://www.w3.org/2006/time#>
+                        SELECT $this
+                        WHERE {
+                            $this ocp:startsPhase ?phase .
+                            ?phase ocp:belongsToProcess ?process .
+                            $this ocp:hasActualTime ?timeDS .
+                            ?acceptance a occp:ConstructionAcceptance .
+                            ?acceptance ocp:belongsToProcess ?process .
+                            ?acceptance ocp:hasActualTime ?timeCA .
+                            FILTER (?timeDS <= ?timeCA)
+                        }
+                    """ ;
+                    sh:message "For 'occp:DeconstructionStart': Actual time (ocp:hasActualTime) must occur after 'occp:ConstructionAcceptance' in the same process."@en ;
+                    sh:severity sh:Violation
+                ] ;
+                # Ensure DeconstructionStart occurs before DeconstructionCompletion in the same phase
+                sh:sparql [
+                    sh:select """
+                        PREFIX occp: <http://www.semanticweb.org/DigitalizeMe/ontologies/2025/3/OCCP#>
+                        PREFIX ocp: <http://www.semanticweb.org/DigitalizeMe/ontologies/2025/3/OCP#>
+                        PREFIX time: <http://www.w3.org/2006/time#>
+                        SELECT $this
+                        WHERE {
+                            $this ocp:startsPhase ?phase .
+                            $this ocp:hasActualTime ?timeDS .
+                            ?completion a occp:DeconstructionCompletion .
+                            ?completion ocp:endsPhase ?phase .
+                            ?completion ocp:hasActualTime ?timeDC .
+                            FILTER (?timeDS >= ?timeDC)
+                        }
+                    """ ;
+                    sh:message "For 'occp:DeconstructionStart': Actual time (ocp:hasActualTime) must occur before 'occp:DeconstructionCompletion' in the same 'occp:PhaseM_Deconstruction'."@en ;
+                    sh:severity sh:Violation
+                ] .
+
+            ocsh:DeconstructionCompletionShape a sh:NodeShape ;
+                sh:targetClass occp:DeconstructionCompletion ;
+                # Instant ends a Phase M (Deconstruction)
+                sh:property [
+                    sh:path ocp:endsPhase ;
+                    sh:class occp:PhaseM_Deconstruction ;
+                    sh:minCount 1 ;
+                    sh:maxCount 1 ;
+                    sh:message "Each 'occp:DeconstructionCompletion' must end exactly one 'occp:PhaseM_Deconstruction' via 'ocp:endsPhase'."@en ;
+                    sh:severity sh:Violation
+                ] ;
+                # Ensure DeconstructionCompletion occurs after DeconstructionStart in the same phase
+                sh:sparql [
+                    sh:select """
+                        PREFIX occp: <http://www.semanticweb.org/DigitalizeMe/ontologies/2025/3/OCCP#>
+                        PREFIX ocp: <http://www.semanticweb.org/DigitalizeMe/ontologies/2025/3/OCP#>
+                        PREFIX time: <http://www.w3.org/2006/time#>
+                        SELECT $this
+                        WHERE {
+                            $this ocp:endsPhase ?phase .
+                            $this ocp:hasActualTime ?timeDC .
+                            ?start a occp:DeconstructionStart .
+                            ?start ocp:startsPhase ?phase .
+                            ?start ocp:hasActualTime ?timeDS .
+                            FILTER (?timeDC <= ?timeDS)
+                        }
+                    """ ;
+                    sh:message "For 'occp:DeconstructionCompletion': Actual time (ocp:hasActualTime) must occur after 'occp:DeconstructionStart' in the same 'occp:PhaseM_Deconstruction'."@en ;
+                    sh:severity sh:Violation
+                ] .
